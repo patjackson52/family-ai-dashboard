@@ -25,8 +25,8 @@ Universal Links). The specs note which milestone each part belongs to.
 
 | # | Component | Spec file | Status | Next step |
 |---|---|---|---|---|
-| 01 | Architecture overview | `01-architecture.md` | **draft → in review** | apply multi-agent review |
-| 02 | Data model & DB schema (Postgres DDL) | `02-data-model.md` | todo | implement DDL from auth+content schemas |
+| 01 | Architecture overview | `01-architecture.md` | **done (2-agent review applied)** | — |
+| 02 | Data model & DB schema (Postgres DDL) | `02-data-model.md` | **in progress** | DDL from auth+content schemas (incl. briefing_cards, body_md/spill, M0/M1) |
 | 03 | API design (OpenAPI) | `03-api.md` | todo | content (tenant-explicit) + auth + device-grant + invite |
 | 04 | Authentication & token service | `04-auth.md` | todo | Firebase verify → mint, per-request scope/revoke |
 | 05 | Invite system | `05-invite.md` | todo | owner-approved flow, token lifecycle |
@@ -44,3 +44,8 @@ Universal Links). The specs note which milestone each part belongs to.
 ## Log
 
 - I1 (2026-06-18): tracker + architecture draft + review dispatched.
+- I1b (2026-06-18): applied 2-agent architecture review — added briefing_cards
+  entity, tenant-explicit READ path + object-storage IDOR controls,
+  constrained M0 household token, complete token/secrets rules, M0=inline-only.
+  **Decision: API host = TypeScript/Vercel (CLI stays Kotlin)** → pending-
+  ratify, operator-inbox INB-9. Started component 02 (DB DDL).

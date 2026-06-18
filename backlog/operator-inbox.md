@@ -9,6 +9,14 @@ Each item: question, context link, **proposed default**, urgency.
 
 ---
 
+- **INB-9 · 2026-06-18 · med · open — Ratify API host = TypeScript/Vercel.**
+  Spec-build loop (architecture review) recommends the backend API in
+  **TypeScript on Vercel** (preserves the ADR 0012 preview→promote→rollback
+  deploy-autonomy rail; a JVM API needs a container host + standing cost vs
+  the <$50/mo cap). **CLI stays Kotlin**; types codegen'd from the JSON
+  schema. Platform choice = ADR-class. **Proposed default:** ratify at C3 as
+  an ADR. Confirm or pick Kotlin/JVM + Cloud Run instead.
+
 - **INB-3 · 2026-06-18 · med · open — Cheapest kill-checks (you, ~2 hrs).**
   Before/while building: (a) run Gemini Daily Brief's school-email→family-
   digest flow yourself; (b) use Maple+ a bit and name what it can't do for a
