@@ -2,9 +2,10 @@
 
 ## Status
 
-Proposed (template default) — accept at bootstrap once the operator
-interview ratifies the constituent values (north star, kill-switch bundle,
-confidence bar, engagement model), stamping the project date.
+Accepted 2026-06-18 (bootstrap). Operator interview ratified the
+constituent values (learning-lab + side-income north star, patient kill-
+switch bundle, moderate confidence bar, inbox + weekly-review engagement).
+Immutable — supersede, do not edit.
 
 ## Context
 

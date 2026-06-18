@@ -2,8 +2,7 @@
 
 ## Status
 
-Proposed (template default) — verify and accept at bootstrap (BOOTSTRAP
-Phase 3), stamping the project date.
+Accepted 2026-06-18 (bootstrap). Immutable — supersede, do not edit.
 
 ## Context
 

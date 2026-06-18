@@ -1,0 +1,184 @@
+# Event Hubs — Design (Draft)
+
+> **Status: Draft / pre-spec (2026-06-18).** Brainstorm output feeding the
+> Phase C PRD (C1) and architecture (C2). **Not gate-accepted.** Depends on
+> **Proposed ADR 0006** (scope expansion) being Accepted before it becomes a
+> binding spec. Authored before G2 — informs, does not authorize build.
+
+## Concept
+
+An **Event Hub** is one typed, AI-curated dossier for a family event —
+everything in one place: info, links, documents, checklists, timeline,
+contacts. Persistent (lives until the event passes, then archives). Rich and
+sectioned. It is the **"Projects"** peer of the daily **"Now"** briefing.
+
+Why it matters: validation round 1 found the daily-briefing concept
+commoditized (Gemini Daily Brief / Cozi / Maple). Event Hubs are **not**
+shipped by those incumbents and lean directly into the content-API /
+power-user wedge — this is the candidate **defensible surface** the
+validation said was missing. See `research/validation-round1-2026-06.md`.
+
+## Two surfaces, one data model (equal peers)
+
+- **Now (briefing):** ephemeral cards — next action, today's logistics.
+  Each card **deep-links into the relevant Hub**.
+- **Hub (project):** persistent dossier. Imminent Hub items (checklist due,
+  countdown, milestone) **emit briefing cards** into Now.
+
+One store, two views. The coupling is the product: Now answers "what next?",
+Hub answers "everything about it." The tap from Now into the exact Hub
+content is the load-bearing interaction — see **Deep-linking** below.
+
+## Data model (JSON schema = source of truth)
+
+```
+Hub {
+  id, type (from template catalog), title, status (planning|active|archived),
+  dates: { start?, end?, countdownTo? }
+  sections: Section[]
+}
+Section { id, title, order, blocks: Block[] }
+Block (typed; discriminated union):
+  - text        { markdown }
+  - link        { url, label, source }
+  - checklist   { items: [{ text, done, due?, assignee? }] }
+  - document    { ref: url | fileRef, label, kind }      // MVP: link + small file ref
+  - milestone   { date, label }
+  - contact     { name, role, phone?, email? }
+  - location    { label, address?, mapUrl? }
+  - budget      { items: [{ label, amount, paid? }] }     // optional, post-MVP candidate
+provenance (per block): { source: "claude" | "email" | "user" | "<url>", at }
+```
+
+Schemas live in `specs/domain-model/schemas/` once this is gate-promoted
+(borrowing ambient-ai's "schema wins over prose" discipline).
+
+## Template catalog (bounded — ADR 0004 "template-catalog-bounded")
+
+Starter Hub types, each = default sections + checklist skeleton:
+`vacation`, `starting-college`, `move`, `party-event`, `new-baby`,
+`medical`, `school-year`. Bounded catalog keeps curation scoped and review-
+able; new types are added deliberately, not inferred open-endedly.
+
+## Curation = push-based, external ("render, don't reason")
+
+AI curation runs **outside** the app — Claude Code, AI loops, scheduled
+tasks — and **pushes** assembled blocks to the content API. The app stores
+and renders; it does not run open-ended ingestion/curation at MVP. App-side
+source ingestion (auto-pull from Calendar/email) is **post-MVP** and ADR-
+gated. This keeps the MVP true to the content-API wedge and the
+restricted-scope/COPPA avoidance in ADR 0004/0005.
+
+**Provenance on every block** (constitution honesty guarantee): each block
+shows where it came from ("added by Claude", "from your email", "link you
+saved"). The product never presents fabricated content as fact.
+
+## Power-user authoring flow
+
+The app **owns and stores** the rendered content (single render source of
+truth). Power users may keep their **own upstream source** (git repo,
+laptop notes, scraped data) and instruct Claude to push into the platform:
+
+1. Power user maintains rich source anywhere they like.
+2. Runs Claude Code with the family-ai-dashboard skill → transforms source
+   into Hub/Section/Block payloads → **idempotent upsert** via the content
+   API (auth token; re-push = update, never duplicate).
+3. App stores + renders to every family member, including non-technical
+   members who only ever see the finished page.
+
+The app does **not** read the user's repo; the flow is push-only. Stable
+block IDs + upsert semantics make re-curation safe and repeatable.
+
+## Content API (extends the MVP content API)
+
+- `PUT /hubs/{id}` — upsert hub (idempotent on id).
+- `PUT /hubs/{id}/sections/{sid}` / `.../blocks/{bid}` — upsert section/block.
+- `POST /hubs/{id}/archive` — archive after event passes.
+- Auth: per-household API token (power user / loop). Rate-limited per token.
+- CLI + Claude skill wrap these; payloads validate against the JSON schema.
+
+## Deep-linking: briefing → Hub content
+
+The load-bearing interaction: a user taps a briefing card and lands on the
+**exact** Hub content it refers to — a header, checklist item, link, or
+document — not just the Hub top.
+
+**Addressing.** Every Section and Block has a stable id (upsert-stable).
+A briefing card carries a `target`:
+
+```
+BriefingCard.target = { hubId, sectionId?, blockId? }
+```
+
+Cards *emitted from* a Hub item already know their origin block, so the
+backlink is free; cards authored independently set the deepest target they
+can resolve.
+
+**One canonical link, all surfaces (universal / app links).**
+- **Web:** `https://<app>/hubs/{hubId}#block-{blockId}` — real anchor.
+- **Native (Android/iOS):** the same https URL via **Android App Links /
+  iOS Universal Links** opens the app; fallback custom scheme
+  `familyai://hub/{hubId}?block={blockId}`.
+- **CMP shared route:** `HubRoute(hubId, focusBlockId?)` renders the Hub,
+  scrolls to the target, **transiently highlights** it, and expands its
+  section.
+
+**Graceful resolution (never dead-end).** If the target block/section is
+missing (archived, deleted, not yet pushed), resolve to the nearest
+ancestor (block → section → hub top) and show a quiet "that item moved"
+note. A deep link never lands on an error.
+
+**Arrival behavior = calm.** Scroll + transient highlight + expand the
+section. The app does **not** auto-navigate out. For a **document block**
+(MVP = link + small file ref), the deep link lands *focused on the block*;
+the user taps to open the external ref. (Confirmed MVP behavior — no
+auto-open, no in-app preview yet; full in-app document preview is post-MVP
+and ADR-0006-revisit-gated.)
+
+**Provenance back-link (optional, low priority).** A block may show
+"surfaced in your briefing" — the inverse of the card's `target`.
+
+## Native vs www
+
+CMP shared composables render the same Hub data per-surface:
+- **Mobile (Android/iOS):** scrollable, collapsible sectioned page; imminent
+  items pinned; countdown header.
+- **Web (Wasm/JS, early-adopter per CMP-Web Beta):** richer multi-column /
+  board layout; same data, denser presentation.
+
+## Documents at MVP
+
+**Links + small file refs only.** Hubs hold URLs and lightweight file
+references; no heavy upload/storage pipeline at MVP. Full document upload +
+storage + a dedicated privacy/security tier is **post-MVP** (feeds C4
+security model). Keeps dogfood sensitivity and cost low.
+
+## Scope, privacy, and gate notes
+
+- **Scope expansion → Proposed ADR 0006.** Hosting curated dossiers +
+  checklists is beyond "render ephemeral briefing cards." A Hub is a
+  **derived, curated dossier the app owns** — it points into the family's
+  calendar/email/lists, it does **not** replace them (reconciles the
+  constitution "not a system of record" line). ADR 0006 must be Accepted
+  before this is a binding spec.
+- **Minor access (ADR 0005, Proposed):** Hubs inherit the strictest data
+  posture for 14+ minor profiles; no email-derived blocks on minor profiles.
+- **Documents** raise sensitivity even as refs — privacy tiering is a C4 item.
+
+## How this feeds the board
+
+- **C1 PRD v0** — Event Hubs + Now briefing as co-equal surfaces.
+- **C2 architecture** — content API + Hub schema + render layer.
+- **A3 capability spike** — extend the content-API spike to include a Hub
+  upsert round-trip from Claude Code.
+
+## Open questions (also in `context/open-questions.md`)
+
+- OQ-hub-archival: retention/export policy for archived Hubs.
+- OQ-hub-collab: can multiple family members edit a Hub in-app, or is
+  authoring push/Claude-only at MVP? (Lean: push/Claude-only at MVP, in-app
+  edit post-MVP.)
+- OQ-doc-storage: when do we add real document upload + its privacy tier?
+- OQ-deeplink-domain: Android App Links + iOS Universal Links need a verified
+  domain + association files (`assetlinks.json` / `apple-app-site-assoc`) —
+  an infra prerequisite for the same https link to open the app. → C2/C3.

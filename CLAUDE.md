@@ -1,14 +1,31 @@
-# {{PROJECT_NAME}}
+# family-ai-dashboard
 
-{{ONE_PARAGRAPH_DESCRIPTION — what this venture is, for whom, in plain
-language.}}
+A calm, AI-powered household dashboard. One account per family, members log
+in (adults at MVP). It reads the family's existing signals — calendar,
+email, lists/tasks, weather, location — and renders a single sleek daily
+**briefing** plus a short list of **smart recommended actions** with deep
+links ("party Saturday — ordered groceries? [list]"; "school email needs an
+RSVP Thursday [reply]"; "rain at soccer 4pm — pack jackets"). Built mobile-
+first on Compose Multiplatform (Android/iOS/Web). The MVP wedge is a
+**content API + CLI + Claude skill** so external AI loops and scheduled
+tasks author/update the cards — the dashboard renders intelligence produced
+elsewhere; it is not an open-ended chatbot. Primary purpose is a
+**learning lab**; durable side income is a co-goal. Dogfooded on the
+operator's own household first.
 
-**It is not:** {{TOP_DRIFT_RISKS — the adjacent things this must not become}}.
-See `context/business-constitution.md` — scope changes require an ADR.
+**It is not:** a family chat/social app; a chore/allowance/gamified kids
+app; a calendar/email/list *replacement*; an open-ended AI chatbot; a
+venture-scale startup. See `context/business-constitution.md` — scope
+changes require an ADR.
 
 ## Current stage
 
-**{{STAGE — e.g. "Planning loop, Phase A (validation)"}}.** Deep planning
+**Bootstrapped 2026-06-18; entering planning loop, Phase A (validation
+follow-through).** Validation round 1 verdict: **CONDITIONAL — learning-lab
+GO, standalone-business NO-GO** (the AI-briefing concept is commoditized by
+Gemini Daily Brief / Alexa+ / funded verticals; build to learn, not to bet
+on revenue). The one defensible wedge found: a **multi-member family-tenant
+briefing**, which no native OS ships. Deep planning
 runs as an autonomous loop over the waterfall board
 (`planning/workstreams.md`) per `processes/planning-loop.md` (ADR 0003):
 the operator sets values/direction and answers the inbox; agents deepen
@@ -104,9 +121,22 @@ through an ADR.
 
 ## Hard guardrails (escalate, never decide alone)
 
-1. {{DOMAIN_GUARDRAIL_1 — the venture's nearest legal/regulatory line}}
+1. **Children's data (COPPA + state child-privacy / App-Store-Accountability
+   laws).** No collection of personal info from under-13s without verifiable
+   parental consent. MVP is **adults-only accounts** — children appear only
+   as subjects in the parents' own data, never as account holders — to stay
+   clear of this line. Adding child accounts is an ADR-gated decision that
+   re-opens the full COPPA burden.
 2. Pricing constants and billing mechanics.
-3. {{DOMAIN_GUARDRAIL_2 — regulated/customer data handling posture}}
-4. {{DOMAIN_GUARDRAIL_3 — customer-relationship line, e.g. cancellations}}
+3. **Restricted-scope data + LLM data handling.** Reading Gmail uses Google
+   *restricted* scopes → mandatory recurring CASA security assessment
+   (~$540–1,500/yr) the moment another family's Gmail is read server-side.
+   MVP avoids it: Calendar read is only *sensitive* (no CASA), and the
+   content-API/forward path means no direct Gmail OAuth at MVP. Routing any
+   family email/calendar content through third-party LLMs requires explicit
+   disclosure. Changing this posture is ADR-gated.
+4. **Customer-relationship line.** Never become the family's system of
+   record; never spam; honor data export + delete on request. No dark-
+   pattern retention or cancellation friction.
 5. Sending messages outside the documented consent posture.
 6. Spend above agreed thresholds; new legal entities; signing anything.

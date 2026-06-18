@@ -2,38 +2,75 @@
 
 ## Identity
 
-{{IDENTITY — 2–4 sentences: what this venture does, for whom, and the one
-positioning sentence that differentiates it. Written so a fresh agent can
-reject off-mission work from this paragraph alone.}}
+**family-ai-dashboard** is a calm, AI-powered household dashboard. One
+account per family, each member logs in. It reads the family's existing
+signals — calendar, email, lists/tasks, weather, location — and renders a
+single sleek daily **briefing** plus a short list of **smart recommended
+actions** with deep links ("party Saturday — ordered groceries?
+[Instacart] [list]"; "school email needs an RSVP by Thursday [reply]";
+"rain at soccer 4pm — pack jackets"). It surfaces what matters now and the
+one next step; it does not try to be the family's whole digital life. The
+differentiator: recommendations are **bounded to a curated template
+catalog** and can be **authored by external AI loops via a content API** —
+the dashboard renders intelligence produced elsewhere; it is not an
+open-ended chatbot.
 
 ## What it is not
 
-The scope firewall. Derive each line from a real, nearby failure mode —
-the adjacent business this could profitably-but-wrongly drift into.
+The scope firewall. Each line is a real, nearby failure mode — the adjacent
+business this could profitably-but-wrongly drift into.
 
-- **Not {{DRIFT_RISK_1}}.** {{why + where the line is}}
-- **Not {{DRIFT_RISK_2}}.** {{why}}
-- **Not {{DRIFT_RISK_3}}.** {{why}}
-- **Not a venture-scale startup** (delete if it is): operator-scale
-  economics — high margin, low ops, optionally sellable.
+- **Not a family chat/messaging or social app.** No DMs, no feed, no
+  comments, no presence pings. The moment it competes for attention rather
+  than saving it, it has betrayed the "calm" promise. Communication stays
+  in the tools families already use.
+- **Not a chore-chart / allowance / kids-reward / gamified app.** That is a
+  different product (and a different, COPPA-heavier, engagement-maximizing
+  posture). We surface upcoming activities and one next step, not points,
+  streaks, or behavior management.
+- **Not a calendar / email / list replacement.** It **reads** those
+  systems and links back into them. It never becomes the system of record
+  the family must migrate into; that raises switching cost, lock-in
+  expectations, and data-custody burden we explicitly reject.
+- **Not an open-ended AI chatbot or general assistant.** Recommendations
+  come from a bounded, reviewable template catalog ("render, don't reason"
+  — reasoning may run in external loops, but the product's surface is
+  curated cards, not a free-text oracle). This caps cost, hallucination,
+  and privacy exposure.
+- **Not a venture-scale startup.** Operator-scale economics — high margin,
+  near-zero steady-state ops, optionally sellable. No funding-dependent
+  growth motion.
 
 ## Customer-experience guarantees (product identity, not marketing)
 
-{{GUARANTEES — the promises that survive every feature decision, e.g.
-consent posture, never-spam, data handling, who owns the customer
-relationship. A feature that erodes one requires a superseding ADR.}}
+A feature that erodes any of these requires a superseding ADR.
 
-## Agent-workflow goal (secondary purpose — delete if not wanted)
+- **Family data is never sold, brokered, or used to train shared models.**
+  It is used only to render that family's own dashboard.
+- **Never spam, never engagement-bait.** Notifications are few, timely, and
+  earn their interruption. Default to quiet.
+- **The family owns its relationship and its data.** Clean export and
+  delete on request; no dark-pattern retention.
+- **Children's data is treated as the highest-sensitivity tier.** Minors'
+  profiles follow the strictest applicable consent posture (COPPA / state
+  AADC); when in doubt, the parent account is the gatekeeper.
+- **AI is honest about its limits.** Recommended actions are suggestions
+  with their source visible; the product never fabricates an event or a
+  task the family didn't have.
+
+## Agent-workflow goal (secondary purpose)
 
 This project doubles as a laboratory for agentic operation: research
-fleets, planning loops, ops automation, monitoring, reporting — under the
-routing and escalation rules in `processes/agent-routing.md`. Steady-state
-target: {{AUTOMATION_TARGET, e.g. "≥90% of operational events touch no
-human"}}.
+fleets, planning loops, scheduled content authoring, ops automation,
+monitoring, reporting — under the routing and escalation rules in
+`processes/agent-routing.md`. The content-API-fed MVP is itself the first
+experiment: AI loops author the dashboard's cards. Steady-state target:
+**≥90% of operational and content-refresh events touch no human.**
 
 ## Hard guardrail
 
 Scope, pricing, compliance posture, customer-data handling, and automation
-boundaries change only through an ADR. Do not let sales conversations,
-customer requests, or agent memory drift the product into the
-"what it is not" list.
+boundaries change only through an ADR. Do not let dogfood convenience,
+feature requests, or agent memory drift the product into the
+"what it is not" list — especially toward chat, gamification, or becoming
+the family's system of record.

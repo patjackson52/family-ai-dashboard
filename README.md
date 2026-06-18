@@ -1,42 +1,46 @@
-# Venture Loop Template
+# family-ai-dashboard
 
-A project-agnostic scaffold for taking a business idea from raw concept
-through validated, adversarially-reviewed, agent-operated deep planning —
-the system extracted from the KeepQR and RevenueCatch projects.
+A calm, AI-powered household dashboard. One account per family, members log
+in (adults at MVP). It reads the family's existing signals — calendar,
+email, lists/tasks, weather, location — and renders a single sleek daily
+**briefing** plus a short list of **smart recommended actions** with deep
+links ("party Saturday — ordered groceries? [list]"; "school email needs an
+RSVP Thursday [reply]"; "rain at soccer 4pm — pack jackets").
 
-What it gives you:
+Built mobile-first on **Compose Multiplatform** (Android/iOS/Web). The MVP
+is a **content API + CLI + Claude skill**: external AI loops and scheduled
+tasks author/update the cards — the dashboard *renders* intelligence
+produced elsewhere; it is not an open-ended chatbot. Dogfooded on the
+operator's own household first. Primary purpose: a **learning lab**; durable
+side income is a co-goal.
 
-- **Governance** that survives years of agent sessions: immutable ADRs,
-  operator-owned values, repo Markdown as source of truth, memory rules.
-- **The planning loop**: an autonomous iteration protocol (orient → select
-  → execute → integrate → review → improve → close) over a waterfall
-  workstream board, with confidence-gated agent decisions and an operator
-  inbox.
-- **Validation machinery**: multi-agent research fleets with cite-or-die
-  rules, mandatory two-round adversarial review, standing P0 viability
-  re-attacks, and measurable kill switches.
-- **Self-improvement**: a loop journal with per-iteration improvement
-  candidates and periodic meta-reviews.
+> **Status (2026-06-18):** bootstrapped; entering the planning loop, Phase A.
+> Validation round 1 verdict: **CONDITIONAL — learning-lab GO,
+> standalone-business NO-GO.** The generic "AI family briefing" is being
+> commoditized by Gemini Daily Brief / Alexa+ and funded verticals; the one
+> defensible (time-sensitive) surface is a **multi-member family-tenant
+> briefing**. See `research/validation-round1-2026-06.md` and `adr/0004`.
 
-## How to use
-
-1. Copy this folder: `cp -r venture-loop-template my-new-venture`
-2. `cd my-new-venture && git init && git add -A && git commit -m "Template"`
-3. Open a Claude Code session there and say:
-   **"Bootstrap this project: \<your business idea in 1–3 sentences\>"**
-   The agent follows [BOOTSTRAP.md](BOOTSTRAP.md) end to end — it interviews
-   you for values and constraints, fills every `{{PLACEHOLDER}}`, seeds the
-   ADRs, runs the initial validation fleet, builds the workstream board,
-   and arms the loop.
-4. Thereafter: "run a loop iteration" (or schedule it hourly). You sweep
-   the inbox weekly.
-
-## Orientation (post-bootstrap)
+## Orientation
 
 - [CLAUDE.md](CLAUDE.md) — session protocol, governance, directory map
 - [context/values-and-direction.md](context/values-and-direction.md) — operator-owned north star
-- [processes/planning-loop.md](processes/planning-loop.md) over [planning/workstreams.md](planning/workstreams.md)
-- [context/operating-lessons.md](context/operating-lessons.md) — why the template is shaped this way
+- [context/business-constitution.md](context/business-constitution.md) — identity + scope firewall (what it is NOT)
+- [adr/0004-product-framing.md](adr/0004-product-framing.md) — what this is, what it isn't, MVP scope
+- [research/validation-round1-2026-06.md](research/validation-round1-2026-06.md) — validation verdict + evidence
+- [planning/workstreams.md](planning/workstreams.md) — the live waterfall board
+- [backlog/operator-inbox.md](backlog/operator-inbox.md) — items awaiting the operator
+- [backlog/now.md](backlog/now.md) — current immediates
 
-Files containing `{{PLACEHOLDER}}` tokens are filled at bootstrap; nothing
-else needs editing to start.
+## Running the loop
+
+- One-shot: open a session here and say **"run a loop iteration"** (follows
+  `processes/planning-loop.md`).
+- Sweep `backlog/operator-inbox.md` weekly.
+
+## Lineage
+
+Built from the **venture-loop template** (extracted from the KeepQR /
+RevenueCatch projects). Process inspiration also drawn from the sibling
+`ambient-ai` spec repo ("render, don't reason"; ADR + open-questions
+discipline; persona-driven key moments).
