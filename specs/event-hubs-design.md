@@ -39,7 +39,8 @@ Hub {
 }
 Section { id, title, order, blocks: Block[] }
 Block (typed; discriminated union):
-  - text        { markdown }
+  - text        { md }                  // SHORT inline markdown (a caption / paragraph)
+  - markdown    { body_md }             // LONG-FORM markdown document (lengthy files) — see §Markdown
   - link        { url, label, source }
   - checklist   { items: [{ text, done, due?, assignee? }] }
   - document    { ref: url | fileRef, label, kind }      // MVP: link + small file ref
@@ -60,9 +61,12 @@ relational and `family_id`-scoped:
 hubs(id, family_id FK NOT NULL, type, title, status, start?, end?,
      countdown_to?, version, created_at, updated_at, deleted_at)
 sections(id, hub_id FK, title, order, created_at, updated_at, deleted_at)
-blocks(id, section_id FK, type, payload jsonb, provenance jsonb, version,
-     created_at, updated_at, deleted_at, UNIQUE(hub_id, id))
+blocks(id, section_id FK, type, payload jsonb, body_md text, provenance jsonb,
+     version, created_at, updated_at, deleted_at, UNIQUE(hub_id, id))
 ```
+`body_md` holds long-form markdown for `text`/`markdown` blocks (kept OUT of
+`payload jsonb` — large content, cleaner full-text search). `payload` carries
+the structured fields of the other block types.
 - **Tenant-explicit API path:** `PUT /families/{fid}/hubs/{id}` (and
   `.../sections/{sid}`, `.../blocks/{bid}`). The credential (household token
   at prototype, minted CLI credential in the product) carries the family
@@ -77,6 +81,40 @@ blocks(id, section_id FK, type, payload jsonb, provenance jsonb, version,
   (`deleted_at`) to honor graceful deep-link "that item moved" resolution.
 - **provenance** gains `credential_id` (which CLI credential pushed the
   block) for audit.
+
+## Markdown & long-form unstructured content
+
+Markdown is the product's primitive for unstructured content. It is authored
+externally (operator via Claude Code), passed to the **CLI**, and pushed to
+the backend as a `markdown` block (or short `text` block). A whole markdown
+file maps to one `markdown` block (or a Section that is one `markdown` block).
+
+- **Flavor:** **CommonMark + GFM subset** (headings, lists, **task lists**,
+  tables, fenced code, blockquotes, strikethrough, links). One documented
+  flavor; the renderer and any server-side processing agree on it.
+- **Lengthy files supported.** `body_md` is a `text` column (not jsonb) — no
+  artificial length cap; design target up to ~1 MB markdown per block.
+  Transport: accept gzip on the upsert; the tenant-explicit
+  `PUT /families/{fid}/.../blocks/{bid}` carries the full body (chunked
+  transfer only if a block ever exceeds the body limit — not expected).
+- **Sanitization (markdown comes from a CLI / external source → untrusted):**
+  **raw HTML is stripped/escaped, never passed through or executed**; no
+  `<script>`, no inline event handlers, no `javascript:`/`data:` URLs.
+  Sanitize on **ingest** (store clean) AND render safely (defense in depth).
+- **Images:** at MVP, markdown images follow the docs scope (links + small
+  refs) — render via a **safe image loader** with allow-listed schemes, or
+  degrade to a tappable link; no arbitrary auto-loading of untrusted remote
+  images. Full inline image rendering is post-MVP (ties to doc storage).
+- **Links:** open **externally on tap** (calm — no surprise in-app
+  navigation), consistent with the deep-link arrival behavior.
+- **Mobile render component:** a single reusable **Markdown renderer**
+  component in the M3 Expressive system (ADR 0009) renders `text`/`markdown`
+  blocks; lengthy docs render lazily (don't recompose the whole doc at once).
+  Renderer library feasibility verified separately (see open question).
+- **Briefing cards** support only **limited inline markdown** (bold/italic/
+  links) — they're short nudges, not documents.
+- **Full-text search ready:** a generated `tsvector` over `body_md` (or
+  external index) is available later without schema change.
 
 ## Template catalog (bounded — ADR 0004 "template-catalog-bounded")
 

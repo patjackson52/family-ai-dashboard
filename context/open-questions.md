@@ -28,6 +28,10 @@ bootstrap from validation round 1 (`research/validation-round1-2026-06.md`).
   (M:N model is built; UI is single-family at MVP). → ADR 0011.
 - **OQ-invite-roles:** can a non-owner adult invite members? Default
   owner-only at MVP. → `specs/auth-and-family-design.md`.
+- **OQ-markdown-render:** confirm the CMP markdown renderer library (GFM
+  support, lengthy-doc performance, raw-HTML safety) + the image policy
+  (links-only at MVP vs safe remote-image loading). → `specs/event-hubs-
+  design.md` §Markdown, C2.
 - **OQ-hub-collab:** At MVP, is Hub authoring push/Claude-only, or can family
   members edit Hubs in-app? (Lean: push-only at MVP, in-app edit post-MVP.)
   → feeds `specs/event-hubs-design.md`, C1b.
