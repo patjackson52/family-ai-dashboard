@@ -103,7 +103,9 @@ household path, default-deny, fail-closed, cross-tenant 404) + `/auth/{refresh,
 signout}` + `POST /families` + JWKS + gated local-only dev-token. 51 tests + final
 security review passed; legacy household token still works (cutover at S3). Details
 + carried debt (S3 refresh-grace, S4 per-family cred binding) in `backlog/next.md`.
-**NEXT = AUTH-S3** (CLI device-grant, RFC 8628) — kills cloud/device hardcoding +
-triggers the household-token cutover. S5/S6 (client auth UI) stay ADR 0008
+**AUTH-S3 ✅ DONE + MERGED** (PR #2, `main` 1fc1918): RFC 8628 CLI device grant
+(`/device/*` + owner approve + lazy-mint) + refresh ~20s grace + Kotlin CLI
+`login`/`push`. Twice multi-agent-reviewed; CI green. Legacy household token still
+works (removal gated). **NEXT = AUTH-S2** (Firebase identity) or **S4** (invites). S5/S6 (client auth UI) stay ADR 0008
 design-gated (A8b auth mockups, incl. authorize-device screen, design via Claude
 Design). Prod deploy of the auth surface = operator-gated (set `AUTH_*` env in Vercel).

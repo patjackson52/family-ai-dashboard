@@ -36,8 +36,8 @@ blocked** behind a queued Claude-Design expanded-detail pass.
 
 ## AUTH (ADR 0021 — S1→S3→S2→S4→S5/S6)
 
-**AUTH-S3 (CLI device grant, RFC 8628) — ✅ DONE (branch `auth-s3`, pending merge)
-2026-06-19.** `/device/{authorize,token}` + `/families/:fid/device/{approve,deny}`
+**AUTH-S3 (CLI device grant, RFC 8628) — ✅ DONE + MERGED** to `main` 2026-06-19
+(PR #2, all CI green). `/device/{authorize,token}` + `/families/:fid/device/{approve,deny}`
 + `/auth/whoami` + the refresh ~20s reuse-grace (resolves the S1 carried debt) +
 Kotlin CLI `login`/`logout`/`whoami` + device-granted `push` (0600 file,
 cross-process refresh lockfile, legacy env fallback). Owner+`kind='app'` approve
