@@ -29,22 +29,33 @@ node src/server.ts                        # local server :8787 (background)
 Cloud (live): `https://family-ai-dashboard.vercel.app`. Redeploy:
 `npm run build:fn && vercel deploy --prod --yes --scope patrick-jacksons-projects-c406a118`.
 
-## Client core + desktop (apps/client — KMP core + Compose desktop)
+## ⚠ Single Gradle build at `apps/` (TASK-KMP, 2026-06-19)
+`apps/client` is now a **true KMP module** (`commonMain` = all shared logic+UI+
+SQLDelight+ktor sync; `androidMain`/`desktopMain` = driver actual + entrypoint;
+iOS target = pending). `apps/androidApp` is a **thin app** depending on `:client`
+(no srcDir borrow, no excludes). **One Gradle root at `apps/`** (Gradle 8.11.1 +
+AGP 8.7.2 — NOT 9.5.1; AGP 8.7 predates stable Gradle 9). Run from `apps/`:
+`./gradlew :client:<task>` / `:androidApp:<task>`. Module-level `cd apps/client`
+no longer works (no per-module wrapper/settings). ktor: cio desktop · okhttp
+android · darwin iOS (when added). SyncClient is now `suspend` (no Dispatchers.IO).
+
+## Client core + desktop (`:client` — KMP core + Compose desktop)
 ```
-cd apps/client && JAVA_HOME=<jdk17> ./gradlew test
+cd apps && JAVA_HOME=<jdk17> ./gradlew :client:desktopTest
 ```
-- Reducer/selector/sync unit tests + **Compose snapshot tests**.
+- Reducer/selector/sync unit tests + **Compose snapshot tests** (all in
+  `desktopTest`). 17 tests green post-restructure.
 - **Snapshots land in `apps/client/build/snapshots/*.png`** — `Read` them to
   verify UI without a device. (Regenerated each run; gitignored. Golden-diff =
   next, ADR 0019.)
 
-## Android (apps/androidApp — the real device target)
+## Android (`:androidApp` — the real device target)
 ```
-cd apps/androidApp
+cd apps
 SDK=~/Library/Android/sdk; DEV=$($SDK/platform-tools/adb devices | awk 'NR>1&&$2=="device"{print $1;exit}')
 FAMILYAI_API=https://family-ai-dashboard.vercel.app FAMILY_ID=… HOUSEHOLD_SECRET=… \
-  ANDROID_HOME=$SDK JAVA_HOME=<jdk17> ./gradlew assembleDebug
-$SDK/platform-tools/adb -s $DEV install -r build/outputs/apk/debug/familyai-android-debug.apk
+  ANDROID_HOME=$SDK JAVA_HOME=<jdk17> ./gradlew :androidApp:assembleDebug
+$SDK/platform-tools/adb -s $DEV install -r androidApp/build/outputs/apk/debug/familyai-android-debug.apk
 $SDK/platform-tools/adb -s $DEV shell am start -n com.familyai.client/com.familyai.client.android.MainActivity
 $SDK/platform-tools/adb -s $DEV exec-out screencap -p > /tmp/x.png   # then Read it
 ```

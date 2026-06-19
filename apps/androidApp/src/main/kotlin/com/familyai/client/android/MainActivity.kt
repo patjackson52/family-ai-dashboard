@@ -9,8 +9,6 @@ import androidx.compose.runtime.remember
 import com.familyai.client.FeedApp
 import com.familyai.client.SyncClient
 import com.familyai.client.createAppStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.reduxkotlin.devtools.inapp.DevToolsTrigger
 import org.reduxkotlin.devtools.inapp.InAppConfig
 import org.reduxkotlin.devtools.inapp.ReduxDevToolsHost
@@ -27,7 +25,7 @@ class MainActivity : ComponentActivity() {
         val fam = BuildConfig.FAMILY_ID
         val sec = BuildConfig.HOUSEHOLD_SECRET
         if (api.isNotEmpty() && fam.isNotEmpty() && sec.isNotEmpty()) {
-          withContext(Dispatchers.IO) { SyncClient(api, fam, sec).sync(store) }
+          SyncClient(api, fam, sec).sync(store)
         }
       }
       // In-app redux devtools drawer (debug build) — a BUBBLE trigger floats
