@@ -51,6 +51,16 @@ Each item: question, context link, **proposed default**, urgency.
   02/05/06/08 specs for the encrypted column split. Accept / amend recovery
   posture / defer.
 
+- **INB-15 · 2026-06-19 · med · open — reduxkotlin 1.0 feedback (you maintain it).**
+  Findings from wiring `1.0.0-alpha01` into the app →
+  `research/reduxkotlin-1.0-feedback.md`. Headline **P0: `redux-kotlin-compose`
+  doesn't pull `redux-kotlin-granular` transitively** (GMM variant misses it,
+  though the POM declares it) → `FieldStateKt` (selectorState/fieldState) fails
+  to load → bare "unresolved reference". Also: compose needs Kotlin ≥2.3.x while
+  core/threadsafe read from 2.2.x; selectorState/fieldState are extensions
+  (top-level call = "unresolved"); and `concurrentStore`/devtools/CLI/screenshots
+  aren't on Maven Central yet. Doc has the full list + severities for 1.0.0.
+
 - **INB-14 · 2026-06-18 · high · open — P3 device-render shell needs your hardware (final G1a step).**
   The client CORE is built + tested (redux-kotlin 0.6.2 store + /sync reducer,
   5 tests green). What remains to literally "see the feed on your phone" needs
