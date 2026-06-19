@@ -18,8 +18,14 @@ name **Dayfold** confirmed · **M0 ships all 6 content types**. Ready to promote
 to `now.md` and build (order in the epic). **Only CL-10 (adaptive) stays
 blocked** behind a queued Claude-Design expanded-detail pass.
 
-- **TASK-CL-0** — Dayfold M3 theme (color/type/shape/motion, light+dark). No
-  schema dep; starts after G-DESIGN.
+- **TASK-CL-0** — Dayfold M3 theme. ✅ **CORE DONE + MERGED** 2026-06-19
+  (`apps/client/.../theme/` — light+dark `ColorScheme` from Brand hex, `Shapes`
+  8/12/16/26/32, type scale, `DayfoldExtendedColors` privacy/provider/map; `FeedApp`
+  wrapped; 7 unit tests + light/dark feed snapshots green, verified). **Follow
+  `CL-0b`:** bundle real Outfit/Figtree TTFs (composeResources; currently
+  `FontFamily.Default`), adopt `MaterialExpressiveTheme`+`MotionScheme.expressive()`
+  (coupled to CL-7; gated on the material3-expressive artifact at 1.9.3), Android
+  `dynamicColorScheme` (androidMain). Seam = the one `DayfoldTheme` function body.
 - **TASK-CL-1** — Schema + codegen: 6 typed content types with **fully
   generated payload `$defs`** (kills the deferred `payload`/`$defs` gap).
 - **TASK-CL-2** — Server: typed storage + nested validation + keyset sync.

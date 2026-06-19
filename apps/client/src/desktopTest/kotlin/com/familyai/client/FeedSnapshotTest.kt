@@ -1,6 +1,6 @@
 package com.familyai.client
 
-import androidx.compose.material3.MaterialTheme
+import com.familyai.client.theme.DayfoldTheme
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
@@ -11,19 +11,32 @@ import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-// Compose UI snapshots — render FeedScreen(state) off-screen and WRITE the PNG
-// to apps/client/build/snapshots/ so a future agent session can `Read` the
-// image to verify the UI without re-deriving the adb-screencap flow (cheaper
-// loop). Golden-diff (Roborazzi, CI-enforced) is the next step — ADR 0019.
+// Compose UI snapshots — render FeedScreen(state) off-screen under DayfoldTheme
+// and WRITE the PNG to apps/client/build/snapshots/ so a future agent session
+// can `Read` the image to verify the UI without re-deriving the adb-screencap
+// flow (cheaper loop). Golden-diff = rk snapshot (CL-SNAP), ADR 0019.
 @OptIn(ExperimentalTestApi::class)
 class FeedSnapshotTest {
-  private fun snapshot(name: String, state: AppState) = runComposeUiTest {
-    setContent { MaterialTheme { FeedScreen(state) } }
+  private fun snapshot(name: String, state: AppState, dark: Boolean = false) = runComposeUiTest {
+    setContent { DayfoldTheme(darkTheme = dark) { FeedScreen(state) } }
     val img = onRoot().captureToImage()
     assertTrue(img.width > 0 && img.height > 0, "snapshot has no pixels")
     val dir = File("build/snapshots").apply { mkdirs() }
     ImageIO.write(img.toAwtImage(), "png", File(dir, "$name.png"))
   }
+
+  @Test
+  fun populatedFeedDarkSnapshot() = snapshot(
+    "feed-populated-dark",
+    AppState(cards = listOf(
+      Card("a", kind = "action", title = "Party Saturday — order groceries?",
+        bodyMd = "Tap [the list](https://instacart.com) to reorder.",
+        provenance = Provenance("claude"), notBefore = "2026-06-18T09:00:00Z"),
+      Card("c", kind = "countdown", title = "Maya starts college",
+        bodyMd = "12 days", provenance = Provenance("claude")),
+    )),
+    dark = true,
+  )
 
   @Test
   fun populatedFeedSnapshot() = snapshot(
