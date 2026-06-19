@@ -19,6 +19,12 @@ kotlin {
   jvmToolchain(17)
   androidTarget()
   jvm("desktop")
+  // iosArm64 = device, iosSimulatorArm64 = Apple-Silicon sim. iosX64 (intel sim)
+  // dropped: redux-kotlin-granular alpha01 has no iosX64 publication, and intel
+  // Macs are EOL. (Operator owns reduxkotlin — add iosX64 granular to restore it.)
+  listOf(iosArm64(), iosSimulatorArm64()).forEach {
+    it.binaries.framework { baseName = "client"; isStatic = true }
+  }
 
   sourceSets {
     val commonMain by getting {
@@ -52,6 +58,10 @@ kotlin {
         implementation("app.cash.sqldelight:sqlite-driver:2.3.2")
         implementation("io.ktor:ktor-client-cio:3.1.1")
       }
+    }
+    iosMain.dependencies {
+      implementation("app.cash.sqldelight:native-driver:2.3.2")
+      implementation("io.ktor:ktor-client-darwin:3.1.1")
     }
     val desktopTest by getting {
       dependencies {
