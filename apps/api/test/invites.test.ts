@@ -182,3 +182,167 @@ describe("POST /invites:redeem", () => {
     expect(r.status).toBe(429);
   });
 });
+
+describe("approve / decline / revoke + GET /families/:fid/invites", () => {
+  it("approve: owner-only (non-member→404, member non-owner→404)", async () => {
+    const o = await ownerOf("approve-owner-1");
+    const inv = await mintInvite(o.token, o.familyId);
+    const invitee = await devToken("approve-invitee-1");
+    await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+    const inviteeId = (await q(`SELECT user_id FROM memberships WHERE family_id=$1 AND status='pending'`,[o.familyId])).rows[0].user_id;
+
+    // stranger (owner of different family) → 404
+    const stranger = await ownerOf("approve-stranger-1");
+    const r404 = await app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${stranger.token}`}});
+    expect(r404.status).toBe(404);
+  });
+
+  it("approve: pending→active→204", async () => {
+    const o = await ownerOf("approve-owner-2");
+    const inv = await mintInvite(o.token, o.familyId);
+    const invitee = await devToken("approve-invitee-2");
+    await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+    const inviteeId = (await q(`SELECT user_id FROM memberships WHERE family_id=$1 AND status='pending'`,[o.familyId])).rows[0].user_id;
+
+    const r = await app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r.status).toBe(204);
+
+    const row = await q(`SELECT status FROM memberships WHERE user_id=$1 AND family_id=$2`,[inviteeId,o.familyId]);
+    expect(row.rows[0].status).toBe("active");
+  });
+
+  it("approve: re-approve active→200 idempotent", async () => {
+    const o = await ownerOf("approve-owner-3");
+    const inv = await mintInvite(o.token, o.familyId);
+    const invitee = await devToken("approve-invitee-3");
+    await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+    const inviteeId = (await q(`SELECT user_id FROM memberships WHERE family_id=$1 AND status='pending'`,[o.familyId])).rows[0].user_id;
+
+    await app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    const r2 = await app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r2.status).toBe(200);
+  });
+
+  it("approve: removed→409", async () => {
+    const o = await ownerOf("approve-owner-4");
+    const inv = await mintInvite(o.token, o.familyId);
+    const invitee = await devToken("approve-invitee-4");
+    await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+    const inviteeId = (await q(`SELECT user_id FROM memberships WHERE family_id=$1 AND status='pending'`,[o.familyId])).rows[0].user_id;
+
+    // decline first → removed
+    await app.request(`/families/${o.familyId}/members/${inviteeId}:decline`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    const r = await app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r.status).toBe(409);
+  });
+
+  it("approve: no membership→404", async () => {
+    const o = await ownerOf("approve-owner-5");
+    const r = await app.request(`/families/${o.familyId}/members/nonexistent-uid:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r.status).toBe(404);
+  });
+
+  it("decline: pending→removed→204; re-decline→404", async () => {
+    const o = await ownerOf("decline-owner-1");
+    const inv = await mintInvite(o.token, o.familyId);
+    const invitee = await devToken("decline-invitee-1");
+    await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+    const inviteeId = (await q(`SELECT user_id FROM memberships WHERE family_id=$1 AND status='pending'`,[o.familyId])).rows[0].user_id;
+
+    const r = await app.request(`/families/${o.familyId}/members/${inviteeId}:decline`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r.status).toBe(204);
+
+    const row = await q(`SELECT status FROM memberships WHERE user_id=$1 AND family_id=$2`,[inviteeId,o.familyId]);
+    expect(row.rows[0].status).toBe("removed");
+
+    // re-decline → 404 (already removed, not pending)
+    const r2 = await app.request(`/families/${o.familyId}/members/${inviteeId}:decline`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r2.status).toBe(404);
+  });
+
+  it("revoke: active invite → 204; revoked invite blocks redeem with 404", async () => {
+    const o = await ownerOf("revoke-owner-1");
+    const inv = await mintInvite(o.token, o.familyId);
+
+    // revoke it
+    const r = await app.request(`/families/${o.familyId}/invites/${inv.invite_id}`,{method:"DELETE",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r.status).toBe(204);
+
+    // verify revoked in DB
+    const row = await q(`SELECT status FROM invites WHERE id=$1`,[inv.invite_id]);
+    expect(row.rows[0].status).toBe("revoked");
+
+    // now redeem → 404
+    const invitee = await devToken("revoke-invitee-1");
+    const r2 = await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+    expect(r2.status).toBe(404);
+  });
+
+  it("revoke: sticky no-op if already non-active → 204", async () => {
+    const o = await ownerOf("revoke-owner-2");
+    const inv = await mintInvite(o.token, o.familyId);
+
+    await app.request(`/families/${o.familyId}/invites/${inv.invite_id}`,{method:"DELETE",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    // revoke again
+    const r2 = await app.request(`/families/${o.familyId}/invites/${inv.invite_id}`,{method:"DELETE",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r2.status).toBe(204);
+  });
+
+  it("GET /families/:fid/invites: returns live invites + pending queue with invitee identity [I4]", async () => {
+    const o = await ownerOf("queue-owner-1");
+    const inv = await mintInvite(o.token, o.familyId);
+
+    // invitee redeems → pending
+    const invitee = await devToken("queue-invitee-1");
+    await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+
+    // mint a second invite (still live)
+    await mintInvite(o.token, o.familyId);
+
+    const r = await app.request(`/families/${o.familyId}/invites`,{method:"GET",headers:{...dev,authorization:`Bearer ${o.token}`}});
+    expect(r.status).toBe(200);
+    const b = await r.json();
+
+    // live invites (the second one we minted; first is exhausted after redeem)
+    expect(Array.isArray(b.invites)).toBe(true);
+    // token/hash must not appear in response
+    for (const inv of b.invites) {
+      expect(inv.token_hash).toBeUndefined();
+      expect(inv.token).toBeUndefined();
+    }
+
+    // pending queue with identity
+    expect(Array.isArray(b.pending)).toBe(true);
+    expect(b.pending.length).toBeGreaterThanOrEqual(1);
+    const pRow = b.pending[0];
+    expect(pRow.uid).toBeDefined();
+    expect(pRow.provider).toBe("dev");
+    expect(pRow.provider_uid).toBe("queue-invitee-1");
+    expect(pRow.role).toBeDefined();
+    expect(pRow.requested_at).toBeDefined();
+  });
+
+  it("concurrent approve: single-activates (exactly one 204, others 200 idempotent)", async () => {
+    const o = await ownerOf("concurrent-approve-owner-1");
+    const inv = await mintInvite(o.token, o.familyId);
+    const invitee = await devToken("concurrent-invitee-1");
+    await app.request("/invites:redeem",{method:"POST",headers:{...dev,authorization:`Bearer ${invitee}`},body:JSON.stringify({token:inv.token})});
+    const inviteeId = (await q(`SELECT user_id FROM memberships WHERE family_id=$1 AND status='pending'`,[o.familyId])).rows[0].user_id;
+
+    // Fire 3 concurrent approvals
+    const results = await Promise.all([
+      app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}}),
+      app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}}),
+      app.request(`/families/${o.familyId}/members/${inviteeId}:approve`,{method:"POST",headers:{...dev,authorization:`Bearer ${o.token}`}}),
+    ]);
+    const statuses = results.map(r => r.status).sort();
+    // exactly one 204, rest 200 (idempotent active)
+    expect(statuses.filter(s => s === 204).length).toBe(1);
+    expect(statuses.every(s => s === 204 || s === 200)).toBe(true);
+
+    // membership is active exactly once
+    const rows = await q(`SELECT status FROM memberships WHERE user_id=$1 AND family_id=$2`,[inviteeId,o.familyId]);
+    expect(rows.rows.length).toBe(1);
+    expect(rows.rows[0].status).toBe("active");
+  });
+});

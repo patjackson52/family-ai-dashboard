@@ -291,6 +291,55 @@ app.post("/invites:redeem", async (c) => {
   return c.json({ family_id: out.family_id, family_name: fam.rows[0]?.name, role: out.role, status: "pending" }, 200);
 });
 
+// Member action routes: POST /families/:fid/members/<uid>:approve  and  :<uid>:decline
+// Hono treats ':uid:approve' as a single param name that greedily matches anything,
+// so we use a single wildcard route and dispatch on the ':action' suffix.
+app.post("/families/:fid/members/*", async (c) => {
+  const fid = c.req.param("fid");
+  // Extract the trailing segment after /members/ from the raw URL path
+  const pathname = new URL(c.req.url).pathname;
+  const membersPrefix = `/families/${fid}/members/`;
+  const seg: string = pathname.startsWith(membersPrefix) ? pathname.slice(membersPrefix.length) : "";
+  const colonIdx = seg.lastIndexOf(":");
+  if (colonIdx === -1) return c.body(null, 404);
+  const uid = seg.slice(0, colonIdx);
+  const action = seg.slice(colonIdx + 1);
+  if (action !== "approve" && action !== "decline") return c.body(null, 404);
+  const g = await ownerGate(c, fid); if ("status" in g) return c.body(null, g.status);
+  if (action === "approve") {
+    const r = await q(`UPDATE memberships SET status='active', joined_at=now() WHERE user_id=$1 AND family_id=$2 AND status='pending' RETURNING role`, [uid, fid]);
+    if (r.rowCount === 1) { (await import("./auth/audit.ts")).audit("invite.approve", { actorUserId: g.sub, familyId: fid, detail:{ uid } }); return c.body(null, 204); }
+    const cur = await q(`SELECT status FROM memberships WHERE user_id=$1 AND family_id=$2`, [uid, fid]);
+    if (cur.rowCount === 0) return c.body(null, 404);
+    return c.body(null, cur.rows[0].status === "active" ? 200 : 409);
+  } else {
+    const r = await q(`UPDATE memberships SET status='removed' WHERE user_id=$1 AND family_id=$2 AND status='pending' RETURNING 1`, [uid, fid]);
+    if (r.rowCount === 1) (await import("./auth/audit.ts")).audit("invite.decline", { actorUserId: g.sub, familyId: fid, detail:{ uid } });
+    return c.body(null, r.rowCount === 1 ? 204 : 404);
+  }
+});
+
+app.delete("/families/:fid/invites/:id", async (c) => {
+  const fid = c.req.param("fid"), iid = c.req.param("id");
+  const g = await ownerGate(c, fid); if ("status" in g) return c.body(null, g.status);
+  const r = await q(`UPDATE invites SET status='revoked' WHERE id=$1 AND family_id=$2 AND status='active' RETURNING 1`, [iid, fid]);
+  if (r.rowCount === 1) (await import("./auth/audit.ts")).audit("invite.revoke", { actorUserId: g.sub, familyId: fid, detail:{ invite_id: iid } });
+  return c.body(null, 204);                                               // sticky: no-op if already non-active
+});
+
+app.get("/families/:fid/invites", async (c) => {
+  const fid = c.req.param("fid");
+  const g = await ownerGate(c, fid); if ("status" in g) return c.body(null, g.status);
+  const invites = await q(`SELECT id, role, mode, max_uses, used_count, expires_at, created_at FROM invites WHERE family_id=$1 AND status='active' AND expires_at>now() ORDER BY created_at DESC`, [fid]);
+  const pending = await q(
+    `SELECT m.user_id AS uid, u.display_name, ui.provider, ui.provider_uid, ui.email_verified,
+            m.role, m.invite_id, m.created_at AS requested_at
+       FROM memberships m JOIN users u ON u.id=m.user_id
+       LEFT JOIN user_identities ui ON ui.user_id=m.user_id
+      WHERE m.family_id=$1 AND m.status='pending' ORDER BY m.created_at`, [fid]);
+  return c.json({ invites: invites.rows, pending: pending.rows });        // [I4] identity in the queue
+});
+
 app.get("/families/:fid/sync", async (c) => {
   const fid = c.req.param("fid");
   const a = await authorizeTenant(c, fid);
