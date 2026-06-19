@@ -47,9 +47,16 @@ initial Now mockups in `designs/`. ADR 0008 **still governs unbuilt surfaces**:
   pooler). Tracker: `specs/prototype/00-build-spec-plan.md`.
 - **Blocked only on operator gates for literal G1a:** **INB-12** (create Vercel +
   Neon → deploy, recipe in inbox) · **INB-14** (Android SDK/device; iOS = Mac).
-- **NEXT BUILD SLICE — `TASK-KMP` (restructure apps/client → true KMP module).**
+- **IN PROGRESS — `TASK-KMP` (restructure apps/client → true KMP module).**
   Prerequisite that unblocks both Android-offline (TASK-SYNC step 2+) and iOS.
-  Pick up fresh (operator-directed 2026-06-19). Then `TASK-SYNC` (offline-first:
+  **Done (2026-06-19, branch `task-kmp-multiplatform`, commit 59e8fd2):** single
+  Gradle build at `apps/` (8.11.1 + AGP 8.7.2); `:client` = KMP (commonMain holds
+  all shared logic+UI+SQLDelight+ktor sync; android+desktop targets); `:androidApp`
+  thin app dep on `:client` (srcDir borrow + ContentStore/Main excludes GONE —
+  unblocks TASK-SYNC step 2); SyncClient → ktor suspend; driver via expect/actual.
+  17 desktop tests green + snapshots + android APK assembles. **Remaining (DoD):**
+  iOS target (ktor-darwin + NativeSqliteDriver actual + iosMain), gated on operator
+  Mac/Xcode. Then `TASK-SYNC` (offline-first:
   SQLDelight DB-as-SoT, unidirectional network→DB→store→UI, instant offline cold
   start, foreground poll, WorkManager/BGTask). **DB layer + ContentStore already
   built + tested on desktop (TASK-SYNC step 1); SQLDelight proven on Kotlin 2.3.20.**
