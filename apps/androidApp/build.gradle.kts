@@ -1,32 +1,11 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
+// TASK-KMP: thin Android application. All shared logic/UI comes from :client
+// (the KMP module) — no more srcDir borrow, no Main.kt/ContentStore excludes, no
+// duplicated SQLDelight setup. This module only owns the Android entrypoint
+// (MainActivity), the manifest, and the in-app redux devtools drawer.
 plugins {
-  id("com.android.application") version "8.7.2"
-  id("org.jetbrains.kotlin.android") version "2.3.20"
-  id("org.jetbrains.kotlin.plugin.compose") version "2.3.20"
-  id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20"
-  id("app.cash.sqldelight") version "2.3.2"
-}
-
-// Generate the SAME ContentDb from the shared .sq (apps/client) so the shared
-// ContentStore compiles on Android too (the modules share source via srcDir).
-sqldelight {
-  databases {
-    create("ContentDb") {
-      packageName.set("com.familyai.client.db")
-      dialect("app.cash.sqldelight:sqlite-3-38-dialect:2.3.2")
-      srcDirs("../client/src/main/sqldelight")
-    }
-  }
-}
-
-// Pin the Kotlin stdlib family to the compiler version (defeats any transitive skew).
-configurations.all {
-  resolutionStrategy.eachDependency {
-    if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-stdlib")) {
-      useVersion("2.3.20")
-    }
-  }
+  id("com.android.application")
+  id("org.jetbrains.kotlin.android")
+  id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -35,7 +14,7 @@ android {
 
   defaultConfig {
     applicationId = "com.familyai.client"
-    minSdk = 34 // java.net.http.HttpClient available (reuse the shared SyncClient)
+    minSdk = 34 // matches :client
     targetSdk = 35
     versionCode = 1
     versionName = "0.0.0-M0"
@@ -53,26 +32,17 @@ android {
   kotlin { jvmToolchain(17) }
 }
 
-// Reuse the shared client logic from apps/client (single source) — exclude the
-// desktop-only Main.kt (uses compose.ui.window, not on Android).
-android.sourceSets["main"].kotlin.srcDir("../client/src/main/kotlin")
-// Exclude desktop-only Main.kt; and (temporarily) ContentStore.kt — the shared
-// SQLDelight DB layer is verified on desktop, but wiring the generated code into
-// the Android compile across the srcDir split needs the proper KMP restructure
-// (AGP variant source-registration). Tracked in TASK-SYNC. Android stays on the
-// in-memory path until then.
-tasks.withType<KotlinCompile>().configureEach { exclude("**/Main.kt", "**/ContentStore.kt") }
+// keep the documented APK name stable across the KMP restructure
+base.archivesName.set("familyai-android")
 
 dependencies {
-  implementation("org.reduxkotlin:redux-kotlin-threadsafe-jvm:1.0.0-alpha01")
-  implementation("org.reduxkotlin:redux-kotlin-compose:1.0.0-alpha01")  // selectorState → f(store.state)→UI
-  implementation("org.reduxkotlin:redux-kotlin-granular:1.0.0-alpha01")  // FieldStateKt dep (not pulled transitively)
-  implementation("org.reduxkotlin:redux-kotlin-devtools-core:1.0.0-alpha01")          // devTools() enhancer (shared store)
-  debugImplementation("org.reduxkotlin:redux-kotlin-devtools-inapp:1.0.0-alpha01")    // in-app debug drawer
-  releaseImplementation("org.reduxkotlin:redux-kotlin-devtools-inapp-noop:1.0.0-alpha01") // release: no-op facade
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+  implementation(project(":client"))
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-  implementation("app.cash.sqldelight:android-driver:2.3.2") // AndroidSqliteDriver for the shared ContentStore
+
+  // In-app redux devtools (debug build = real drawer; release = no-op facade).
+  debugImplementation("org.reduxkotlin:redux-kotlin-devtools-inapp:1.0.0-alpha01")
+  releaseImplementation("org.reduxkotlin:redux-kotlin-devtools-inapp-noop:1.0.0-alpha01")
+
   val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
   implementation(composeBom)
   implementation("androidx.compose.material3:material3")
