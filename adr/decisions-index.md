@@ -22,3 +22,4 @@ editing it.
 | 0013 | Client Architecture — KMP/CMP Shared UI + redux-kotlin 1.0.0-alpha1 | Accepted 2026-06-18 (shared code+UI all clients; redux-kotlin; agent-first) |
 | 0014 | Private On-Device Trigger Engine (geo/time/activity) | Accepted 2026-06-18 (triggers=metadata; device matches locally; live position never leaves) |
 | 0015 | End-to-End Encryption | **Proposed** 2026-06-18 (operator-gated; CONDITIONAL GO — encrypt M0, distribute keys M1; changes M0 schema) |
+| 0016 | Two-Way Interactive Pull-Loop (reserved, bounded-now) | **Proposed** 2026-06-18 (additive; reasoning stays in the key-holding loop; reserved actions[]/intents) |

@@ -75,6 +75,7 @@ CREATE TABLE blocks (
   body_ref    text,                          -- [M1] object-storage key when body spilled (>~1–few MB)
   provenance  jsonb NOT NULL,                -- { source, at, credential_id }
   triggers    jsonb,                          -- [ADR 0014] geo/when/activity; matched on-device only
+  actions     jsonb,                          -- [ADR 0016, reserved] interactive button/ask defs {label,action_id,params}
   ord         int NOT NULL DEFAULT 0,
   version     bigint NOT NULL DEFAULT 1,
   created_at  timestamptz NOT NULL DEFAULT now(),
@@ -97,6 +98,7 @@ CREATE TABLE briefing_cards (              -- the "Now" surface
   target_block_id   text,
   provenance  jsonb NOT NULL,
   triggers    jsonb,                          -- [ADR 0014] geo/when/activity; matched on-device only
+  actions     jsonb,                          -- [ADR 0016, reserved] interactive button/ask defs
   not_before  timestamptz,                   -- when the card should surface
   expires_at  timestamptz,
   version     bigint NOT NULL DEFAULT 1,

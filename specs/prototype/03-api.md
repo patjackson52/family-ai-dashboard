@@ -167,6 +167,16 @@ All invites create a **pending** membership; owner approval activates (ADR 0011)
 - **Export (F13):** `/auth/export` returns inline JSON at MVP (small tenants);
   becomes a job later.
 
+## Reserved — two-way pull-loop (ADR 0016, NOT built at MVP)
+
+Named so the contract is additive later: members write inputs, the key-holding
+AI loop pulls + resolves, results return as normal content cards.
+- `POST /families/{fid}/intents` (member, scope `intents:write`) — a tapped
+  `action`/structured ask (bounded; free-text prompts gated by a future ADR).
+- `GET /families/{fid}/intents?status=pending` + `…:resolve` (loop credential,
+  scope `intents:resolve`). Intents are E2E-encrypted; only a **key-holding**
+  loop can decrypt/process — never the server.
+
 ## Open questions (resolved this pass)
 - ✅ Sync cursor = opaque `(updated_at,id)` keyset + envelope (above).
 - ✅ Bulk = full-replace soft-delete of omitted children, version-bumped,
