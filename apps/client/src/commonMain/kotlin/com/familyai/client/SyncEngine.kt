@@ -11,7 +11,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import org.reduxkotlin.Store
 
 // Orchestrates the offline-first dataflow (ADR 0020): owns the DB→store bridge,
