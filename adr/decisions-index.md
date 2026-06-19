@@ -25,3 +25,4 @@ editing it.
 | 0016 | Two-Way Interactive Pull-Loop (reserved, bounded-now) | **Proposed** 2026-06-18 (additive; reasoning stays in the key-holding loop; reserved actions[]/intents) |
 | 0017 | E2E Key-Authenticity + Deploy Trust-Root Boundary | **Proposed** 2026-06-18 (M1 security gate; from the 6-agent review — fake-key MITM + trust-root concentration) |
 | 0018 | API Host — TypeScript on Vercel | Accepted 2026-06-18 (INB-9; CLI/client stay Kotlin; types codegen from schema; Postgres via pooler) |
+| 0019 | Client Observability & Tooling (devtools/snapshots/debug/CLI) | **Proposed** 2026-06-19 — debug middleware + Compose snapshots NOW; devtools/golden-diff/CLI when reduxkotlin publishes (INB-15) |
