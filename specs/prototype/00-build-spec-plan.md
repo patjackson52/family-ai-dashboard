@@ -35,6 +35,15 @@ Universal Links). The specs note which milestone each part belongs to.
 | 08 | Mobile client (CMP) | `08-mobile-client.md` | **done (2-agent review applied)** | ⚠ pre-build gate: confirm redux-kotlin alpha1 coordinates |
 | 09 | Security controls + test/verify plan | `09-security-and-test.md` | **done (cross-spec review applied)** | — |
 | 10 | M0 implementation plan | `10-implementation-plan.md` | **done (review applied)** | redux-kotlin gate RESOLVED (alpha01 exists; default 0.6.2 stable, INB-11) |
+| 11 | Content JSON-schema contract | `specs/domain-model/schemas/content.schema.json` | **authored** (P0 task-1, host-agnostic) | content fields = E2E typed-hole (EncryptedEnvelope), resolve at INB-10 before freeze |
+
+> ⛔ **LOOP IS AT THE OPERATOR-DECISION GATE.** Specs (01-09) + impl plan (10)
+> + the JSON-schema contract (11) are done — *enough to implement*. Every
+> remaining build step (P0 scaffold, P1 DDL freeze, the codegen content-field
+> shape) is **blocked on operator decisions: INB-9 (TS/Vercel host) + INB-10
+> (E2E — gates the schema)**. Further autonomous spec iterations would either
+> rework provisional artifacts (E2E undecided) or begin build (needs host +
+> G1a). **Recommend: sweep the inbox (INB-1…11) or stop the loop.**
 
 > ✅ **SUITE COMPLETE (2026-06-18).** Final cross-spec verification:
 > **implementation-ready for the M0 dumb-store spine.** The 4 close-items are
