@@ -115,8 +115,14 @@ export async function rotate(
         );
         graceResult = { refresh: nextOpaque, graced: true };
       } else {
-        // cas2 failed: successor already consumed (shouldn't reach here under advisory lock
-        // with pool max:1, but be safe)
+        // cas2 failed: defensive; unreachable while the advisory lock holds.
+        // The advisory lock (pg_advisory_xact_lock) is the real serializer here —
+        // it serializes concurrent grace presenters under any pool size (max:10 in
+        // tests + non-Vercel; max:1 is Vercel-only and NOT the reason this is safe).
+        // Do NOT remove the lock: without it, two concurrent presenters of the same
+        // grace-window token could both pass the grace check and both attempt cas2,
+        // forking the lineage. The lock ensures the second sees the first's committed
+        // consumption and falls through to the collision branch instead.
         genuineReuse = true;
         await gc.query(
           `UPDATE credentials SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL`,
