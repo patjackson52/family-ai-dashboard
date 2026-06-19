@@ -197,7 +197,7 @@ app.post("/device/token", async (c) => {
   return c.json({ error: out.error }, 400);
 });
 
-async function deviceOwnerGate(c: any, fid: string) {
+async function ownerGate(c: any, fid: string) {
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return { status: a.status };
   if (a.role !== "owner") return { status: 403 };
@@ -207,7 +207,7 @@ async function deviceOwnerGate(c: any, fid: string) {
 
 app.post("/families/:fid/device/approve", async (c) => {
   const fid = c.req.param("fid");
-  const g = await deviceOwnerGate(c, fid);
+  const g = await ownerGate(c, fid);
   if ("status" in g) return c.body(null, g.status);
   const { isLocked, recordFailure, resetFailures } = await import("./auth/ratelimit.ts");
   const { audit } = await import("./auth/audit.ts");
@@ -229,7 +229,7 @@ app.post("/families/:fid/device/approve", async (c) => {
 
 app.post("/families/:fid/device/deny", async (c) => {
   const fid = c.req.param("fid");
-  const g = await deviceOwnerGate(c, fid);
+  const g = await ownerGate(c, fid);
   if ("status" in g) return c.body(null, g.status);
   const body = await c.req.json().catch(() => null);
   if (!body?.user_code) return c.json({ type: "bad-request" }, 400);
@@ -237,6 +237,33 @@ app.post("/families/:fid/device/deny", async (c) => {
   const { audit } = await import("./auth/audit.ts");
   if (r.rowCount === 1) await audit("device.deny", { actorUserId: g.sub, familyId: fid });
   return c.body(null, r.rowCount === 1 ? 204 : 404);
+});
+
+app.post("/families/:fid/invites", async (c) => {
+  const fid = c.req.param("fid");
+  const g = await ownerGate(c, fid);
+  if ("status" in g) return c.body(null, g.status);
+  const body = await c.req.json().catch(() => null);
+  const mode = body?.mode;
+  if (mode !== "qr" && mode !== "link") return c.json({ type: "bad-mode" }, 400);
+  const role = body?.role ?? "adult";
+  if (role !== "adult") return c.json({ type: "bad-role" }, 400);          // never owner/teen
+  const maxUses = mode === "qr" ? 1 : Math.trunc(body?.max_uses ?? 1);
+  if (maxUses < 1 || maxUses > 10) return c.json({ type: "bad-max-uses" }, 400);
+  const { clientIp, hit } = await import("./auth/ratelimit.ts");
+  if (!(await hit(`owner:mint:${g.sub}`, 600, 20)).ok) return c.body(null, 429);
+  // live-invite + pending caps (expires_at-filtered) [I3]
+  const caps = await q(
+    `SELECT (SELECT count(*) FROM invites WHERE family_id=$1 AND status='active' AND expires_at>now()) AS inv,
+            (SELECT count(*) FROM memberships WHERE family_id=$1 AND status='pending') AS pend`, [fid]);
+  if (Number(caps.rows[0].inv) >= 10 || Number(caps.rows[0].pend) >= 20) return c.body(null, 429);
+  const { createInvite } = await import("./auth/invites.ts");
+  const { inviteId, token } = await createInvite(fid, g.sub, mode, role, maxUses);
+  const { audit } = await import("./auth/audit.ts");
+  await audit("invite.mint", { actorUserId: g.sub, familyId: fid, detail: { mode, role, max_uses: maxUses } });
+  const expires = await q(`SELECT expires_at FROM invites WHERE id=$1`, [inviteId]);
+  c.header("cache-control", "no-store, no-transform");                    // BREACH: raw token
+  return c.json({ invite_id: inviteId, token, url: `${new URL(c.req.url).origin}/invite/${token}`, role, mode, expires_at: expires.rows[0].expires_at }, 201);
 });
 
 app.get("/families/:fid/sync", async (c) => {
