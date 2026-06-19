@@ -2,17 +2,16 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
   id("com.android.application") version "8.7.2"
-  id("org.jetbrains.kotlin.android") version "2.2.20"
-  id("org.jetbrains.kotlin.plugin.compose") version "2.2.20"
-  id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
+  id("org.jetbrains.kotlin.android") version "2.3.20"
+  id("org.jetbrains.kotlin.plugin.compose") version "2.3.20"
+  id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20"
 }
 
-// Keep the whole Kotlin stdlib family pinned to the module's compiler version —
-// a transitive kotlin-stdlib:2.3.20 (metadata 2.3) is unreadable by 2.2.20.
+// Pin the Kotlin stdlib family to the compiler version (defeats any transitive skew).
 configurations.all {
   resolutionStrategy.eachDependency {
     if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-stdlib")) {
-      useVersion("2.2.20")
+      useVersion("2.3.20")
     }
   }
 }
@@ -48,8 +47,8 @@ tasks.withType<KotlinCompile>().configureEach { exclude("**/Main.kt") }
 
 dependencies {
   implementation("org.reduxkotlin:redux-kotlin-threadsafe-jvm:1.0.0-alpha01")
-  // redux-kotlin-compose:1.0.0-alpha01 = Kotlin-2.3 metadata (unreadable from
-  // 2.2.20). Re-add for selectorState/fieldState once republished at 2.2.
+  implementation("org.reduxkotlin:redux-kotlin-compose:1.0.0-alpha01")  // selectorState → f(store.state)→UI
+  implementation("org.reduxkotlin:redux-kotlin-granular:1.0.0-alpha01")  // FieldStateKt dep (not pulled transitively)
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
   val composeBom = platform("androidx.compose:compose-bom:2024.12.01")

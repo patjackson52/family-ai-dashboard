@@ -1,10 +1,10 @@
 import org.jetbrains.compose.ExperimentalComposeLibrary
 
 plugins {
-  kotlin("jvm") version "2.2.20"
-  kotlin("plugin.serialization") version "2.2.20"
-  kotlin("plugin.compose") version "2.2.20"
-  id("org.jetbrains.compose") version "1.8.2"
+  kotlin("jvm") version "2.3.20"
+  kotlin("plugin.serialization") version "2.3.20"
+  kotlin("plugin.compose") version "2.3.20"
+  id("org.jetbrains.compose") version "1.9.3"
 }
 
 repositories {
@@ -15,9 +15,8 @@ repositories {
 
 dependencies {
   implementation("org.reduxkotlin:redux-kotlin-threadsafe-jvm:1.0.0-alpha01") // latest (operator owns reduxkotlin); [F5] threadsafe
-  // redux-kotlin-compose-jvm:1.0.0-alpha01 has Kotlin-2.3 metadata, unreadable
-  // from Kotlin 2.2.20 (selectorState/fieldState → "unresolved"). Re-add once
-  // it's republished at 2.2-compatible metadata (or the app moves to 2.3.20).
+  implementation("org.reduxkotlin:redux-kotlin-compose-jvm:1.0.0-alpha01")     // selectorState/fieldState → f(store.state)→UI (needs Kotlin 2.3+)
+  implementation("org.reduxkotlin:redux-kotlin-granular-jvm:1.0.0-alpha01")     // FieldStateKt depends on it; not pulled transitively by the compose .module
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
   implementation(compose.desktop.currentOs)
   implementation(compose.material3)
