@@ -99,6 +99,18 @@ app.post("/auth/signout", async (c) => {
   return c.body(null, 204);
 });
 
+app.get("/auth/whoami", async (c) => {
+  const t = bearer(c); if (!t) return c.body(null, 401);
+  try {
+    const { verifyAccess } = await import("./auth/tokens.ts");
+    const payload = await verifyAccess(t);
+    // family_scope lives on the credential row; the JWT cid field points to it.
+    const row = await q(`SELECT family_scope FROM credentials WHERE id=$1 AND revoked_at IS NULL`, [payload.cid]);
+    if (!row || row.rowCount === 0) return c.body(null, 401);
+    return c.json({ family_id: row.rows[0].family_scope });
+  } catch { return c.body(null, 401); }
+});
+
 app.post("/families", async (c) => {
   const t = bearer(c); if (!t) return c.body(null, 401);
   let sub: string;
