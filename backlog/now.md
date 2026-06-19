@@ -28,7 +28,8 @@ The immediate next work = **A8: hi-fi mockups of Now + Hubs** (Claude Code +
 - **Spec-build loop SUSPENDED** (cron stopped) — process right-sized for the
   solo M0 build (kept: spec-gate + inbox + multi-agent reviews).
 - **Decisions:** M0 = **plaintext** (live E2EE → M1, ADR 0017 gate); M0 surface
-  = **briefing-feed only** (Hubs → next slice); redux default **0.6.2**.
+  = **briefing-feed only** (Hubs → next slice); redux **1.0.0-alpha01** (INB-11
+  superseded 2026-06-19 — operator owns reduxkotlin; `f(store.state)→UI`).
 - **Spec suite + impl plan + JSON-schema contract = done; schema freeze
   unblocked.** Ready to build the M0 spine.
 - **INB-9 RESOLVED → TypeScript on Vercel (ADR 0018).**

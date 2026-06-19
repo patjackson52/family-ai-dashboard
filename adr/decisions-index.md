@@ -19,7 +19,7 @@ editing it.
 | 0010 | Auth & Family-Tenancy Architecture (Firebase Auth, M:N membership, RFC 8628 device grant) | **Superseded by 0011** (2026-06-18) |
 | 0011 | Auth & Family-Tenancy Architecture (Hardened) | Accepted 2026-06-18 (supersedes 0010; post-5-agent-review) |
 | 0012 | Agent-Operated Build & Deploy — Autonomy Boundaries | Accepted 2026-06-18 (operator-set: full prod autonomy + safety rails, budget cap, browser-after-login) |
-| 0013 | Client Architecture — KMP/CMP Shared UI + redux-kotlin 1.0.0-alpha1 | Accepted 2026-06-18. **Build pin (INB-11): default `0.6.2` stable** (alpha01 verified 1-day-old) — alpha01 is the opt-in upgrade; code calls `fieldState` not `fieldStateOf`. |
+| 0013 | Client Architecture — KMP/CMP Shared UI + redux-kotlin 1.0.0-alpha1 | Accepted 2026-06-18. **Build pin → `1.0.0-alpha01`** (INB-11 superseded 2026-06-19: operator owns/maintains reduxkotlin, so alpha-churn risk is moot; directive: latest APIs + `f(store.state)→UI`). Core/threadsafe on alpha01 verified (build+test+Pixel). `redux-kotlin-compose` selectorState/fieldState pending a 2.2-compatible republish (alpha01 ships 2.3 metadata). |
 | 0014 | Private On-Device Trigger Engine (geo/time/activity) | Accepted 2026-06-18 (triggers=metadata; device matches locally; live position never leaves) |
 | 0015 | End-to-End Encryption | **Proposed — scoped to M1** (INB-10: M0 = PLAINTEXT; live E2EE is an M1 option gated by ADR 0017) |
 | 0016 | Two-Way Interactive Pull-Loop (reserved, bounded-now) | **Proposed** 2026-06-18 (additive; reasoning stays in the key-holding loop; reserved actions[]/intents) |

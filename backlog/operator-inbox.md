@@ -19,7 +19,13 @@ Each item: question, context link, **proposed default**, urgency.
   schema. Platform choice = ADR-class. **Proposed default:** ratify at C3 as
   an ADR. Confirm or pick Kotlin/JVM + Cloud Run instead.
 
-- **INB-11 · ANSWERED 2026-06-18 → default `0.6.2` stable** (alpha01 opt-in). Indexed on ADR 0013.
+- **INB-11 · SUPERSEDED 2026-06-19 → use `1.0.0-alpha01` (the latest).** The
+  operator **owns/maintains reduxkotlin** and will keep it updated, so the
+  alpha-churn risk that drove the 0.6.2 default doesn't apply. New directive:
+  **leverage the latest APIs** (`concurrentStore`, devtools, the reduxkotlin
+  CLI, screenshot tooling) and architect the clients as **`f(store.state) →
+  UI`** — the store is the single state source. Verified: both Kotlin modules
+  build + test + render on the Pixel on alpha01. (Was: 2026-06-18 → 0.6.2.)
 - **INB-10 · ANSWERED 2026-06-18 → M0 = PLAINTEXT** (live E2EE = M1 option, gated by ADR 0017). Schema freeze unblocked.
 - *(review decisions 2026-06-18: M0 = briefing-feed-only [Hubs→next slice]; planning-loop ritual suspended for the solo M0 build — keep spec-gate + inbox + multi-agent reviews.)*
 

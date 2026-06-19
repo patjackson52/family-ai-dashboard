@@ -14,7 +14,10 @@ repositories {
 }
 
 dependencies {
-  implementation("org.reduxkotlin:redux-kotlin-threadsafe-jvm:0.6.2") // [F5] threadsafe: UI dispatches sync off-main
+  implementation("org.reduxkotlin:redux-kotlin-threadsafe-jvm:1.0.0-alpha01") // latest (operator owns reduxkotlin); [F5] threadsafe
+  // redux-kotlin-compose-jvm:1.0.0-alpha01 has Kotlin-2.3 metadata, unreadable
+  // from Kotlin 2.2.20 (selectorState/fieldState → "unresolved"). Re-add once
+  // it's republished at 2.2-compatible metadata (or the app moves to 2.3.20).
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
   implementation(compose.desktop.currentOs)
   implementation(compose.material3)

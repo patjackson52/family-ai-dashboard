@@ -47,7 +47,9 @@ android.sourceSets["main"].kotlin.srcDir("../client/src/main/kotlin")
 tasks.withType<KotlinCompile>().configureEach { exclude("**/Main.kt") }
 
 dependencies {
-  implementation("org.reduxkotlin:redux-kotlin-threadsafe-jvm:0.6.2")
+  implementation("org.reduxkotlin:redux-kotlin-threadsafe-jvm:1.0.0-alpha01")
+  // redux-kotlin-compose:1.0.0-alpha01 = Kotlin-2.3 metadata (unreadable from
+  // 2.2.20). Re-add for selectorState/fieldState once republished at 2.2.
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
   val composeBom = platform("androidx.compose:compose-bom:2024.12.01")

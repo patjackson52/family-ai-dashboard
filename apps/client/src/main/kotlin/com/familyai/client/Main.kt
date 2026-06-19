@@ -1,26 +1,18 @@
 package com.familyai.client
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // Desktop shell — lets the operator preview the feed on a laptop (no device).
-// The Android/iOS shells reuse FeedScreen + the same store/SyncClient.
+// UI = f(store.state) via FeedApp; the shell only owns the store + the sync
+// effect. The Android/iOS shells do the same.
 fun main() = application {
   val store = remember { createAppStore() }
-  var state by remember { mutableStateOf(store.state) }
-  DisposableEffect(Unit) {
-    val unsub = store.subscribe { state = store.state }
-    onDispose { unsub() }
-  }
   LaunchedEffect(Unit) {
     val api = System.getenv("FAMILYAI_API")
     val fam = System.getenv("FAMILY_ID")
@@ -30,6 +22,6 @@ fun main() = application {
     }
   }
   Window(onCloseRequest = ::exitApplication, title = "family-ai-dashboard") {
-    MaterialTheme { FeedScreen(state) }
+    MaterialTheme { FeedApp(store) }
   }
 }
