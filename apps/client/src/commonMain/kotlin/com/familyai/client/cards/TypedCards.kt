@@ -58,7 +58,7 @@ fun TypedCardItem(card: Card, onAction: (CardAction) -> Unit) {
 // else the tile/chip would be the same color as the card and vanish; matches the
 // mockup's solid-coral invite kicker.
 @Composable
-private fun accentColors(a: CardAccent, solid: Boolean): Pair<Color, Color> {
+internal fun accentColors(a: CardAccent, solid: Boolean): Pair<Color, Color> {
   val cs = MaterialTheme.colorScheme
   return when (a) {
     CardAccent.Primary -> if (solid) cs.primary to cs.onPrimary else cs.primaryContainer to cs.onPrimaryContainer
@@ -70,7 +70,7 @@ private fun accentColors(a: CardAccent, solid: Boolean): Pair<Color, Color> {
 /** Rounded accent tile with a short monogram (type/initials). 44dp. Decorative —
  *  the kicker chip already states the type in text, so it's hidden from a11y. */
 @Composable
-private fun AccentTile(monogram: String, accent: CardAccent, solid: Boolean) {
+internal fun AccentTile(monogram: String, accent: CardAccent, solid: Boolean) {
   val (bg, fg) = accentColors(accent, solid)
   Surface(color = bg, shape = RoundedCornerShape(14.dp),
     modifier = Modifier.size(44.dp).clearAndSetSemantics {}) {
@@ -81,7 +81,7 @@ private fun AccentTile(monogram: String, accent: CardAccent, solid: Boolean) {
 }
 
 @Composable
-private fun KickerChip(text: String, accent: CardAccent, solid: Boolean) {
+internal fun KickerChip(text: String, accent: CardAccent, solid: Boolean) {
   if (text.isBlank()) return
   val (bg, fg) = accentColors(accent, solid)
   Surface(color = bg, shape = RoundedCornerShape(8.dp)) {
@@ -93,23 +93,28 @@ private fun KickerChip(text: String, accent: CardAccent, solid: Boolean) {
 }
 
 @Composable
-private fun ProvenanceChip(source: String?) {
+internal fun ProvenanceChip(source: String?) {
   val label = sourceLabel(source) ?: return
   Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-/** Honesty chip (ADR 0014/0015) — rendered verbatim from authored privacy.storage. */
+/** honest privacy.storage → enforced copy (ADR 0014/0015). NOTE: a geo card whose
+ *  payload holds coords must be authored `on_device` ("a copy is cached"), NOT
+ *  `location_local` — only *live position* stays local (ADR 0014). */
+internal fun privacyLabel(storage: String?): String? = when (storage) {
+  null -> null
+  "on_device" -> "Cached on your device"
+  "in_browser" -> "Kept in your browser"
+  "location_local" -> "Location stays on device"
+  "matched_on_device" -> "Matched on your device"
+  else -> storage
+}
+
+/** Honesty chip (ADR 0014/0015) — rendered from the enforced privacy.storage enum. */
 @Composable
-private fun PrivacyChip(storage: String?) {
-  if (storage == null) return
+internal fun PrivacyChip(storage: String?) {
+  val label = privacyLabel(storage) ?: return
   val ext = LocalDayfoldColors.current
-  val label = when (storage) {
-    "on_device" -> "Cached on your device"
-    "in_browser" -> "Kept in your browser"
-    "location_local" -> "Location stays on device"
-    "matched_on_device" -> "Matched on your device"
-    else -> storage
-  }
   Surface(color = ext.privacyContainer, shape = RoundedCornerShape(8.dp)) {
     Text(label, color = ext.onPrivacyContainer, style = MaterialTheme.typography.labelSmall,
       modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
@@ -186,7 +191,7 @@ private fun InviteCard(card: Card, onAction: (CardAction) -> Unit) {
 }
 
 @Composable
-private fun RsvpDisplayRow(rsvpState: String?) {
+internal fun RsvpDisplayRow(rsvpState: String?) {
   // Static reflection of the authored RSVP — NOT an input (M0 has no write path).
   Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.semantics {
     contentDescription = "RSVP status: ${rsvpState ?: "no reply yet"}"
@@ -229,7 +234,7 @@ private fun GeoCard(card: Card, onAction: (CardAction) -> Unit) {
 }
 
 @Composable
-private fun MapStrip() {
+internal fun MapStrip() {
   val ext = LocalDayfoldColors.current
   Surface(color = ext.mapBackground, shape = RoundedCornerShape(12.dp),
     modifier = Modifier.fillMaxWidth().height(92.dp).clearAndSetSemantics {}) {

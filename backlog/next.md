@@ -102,7 +102,29 @@ blocked** behind a queued Claude-Design expanded-detail pass.
   **NEXT = CL-6** (DetailScreen + redux nav). **CL-6 prerequisite:** the
   `expect/actual PlatformActions` effect layer (perform `CardAction`) — wire
   `onAction` (currently no-op) through middleware (ADR 0013 Rule E) in each shell.
-- **TASK-CL-6** — Client UI: DetailScreen (per-type hero + provenance/privacy).
+- **TASK-CL-6** — Client UI: DetailScreen + redux nav. ✅ **DONE** (branch
+  `cl-6-detail-screen` → integrated into `cl-next`) 2026-06-20. **Nav as app
+  state** (ADR 0013): `AppState.detailStack: List<String>` + `NavToDetail`(push,
+  dedup-top)/`NavBack`(pop); `CardsLoaded` prunes synced-away ids; selector
+  `currentDetailCard` (null→feed). `FeedApp` host: one **remembered** handler
+  routes `OpenDetail`→`dispatch(NavToDetail)`, all other `CardAction`s→shell
+  `PlatformActions`; renders DetailScreen when a card is open else FeedScreen.
+  **DetailScreen**: colored hero header (back/share, solid accent tile+kicker,
+  title) + per-type hero media + safe **actions row** (no Add-to-Hub/Save/RSVP-
+  write — read-only ADR 0020) + **DETAILS** meta list + provenance/**honest
+  privacy** chips. Pure `detailMeta`/`detailActions` (unit-tested). Reuses CL-5
+  chrome (promoted `private`→`internal`). **69 desktop tests green** (Reducer 8
+  nav, DetailMeta 4, snapshots 16 incl. 6 detail types light+dark — invite+contact
+  PNGs visually verified); **Android + iOS-sim compile**. Twice-reviewed (pre-impl:
+  remembered handler + stack-prune + process-death/geo-honesty wording; final:
+  hardware-back + InfoPanel divergence). Spec:
+  `docs/superpowers/specs/2026-06-20-cl-6-detail-screen-design.md`.
+  **M0 cuts → CL-7/follows:** hardware/gesture back→NavBack (no plain BackHandler
+  at compose-MP 1.9.3 → folds into CL-7's PredictiveBackHandler; **interim: Android
+  hardware-back exits the app from detail**); distinct per-type hero media (M0 =
+  generic InfoPanel + geo MapStrip; avatar/date-block/OG/page-preview = fidelity
+  follow); `selectorState` recomposition scoping (perf follow). **NEXT = CL-7**
+  (fold gesture / container transform + wires hardware-back).
 - **TASK-CL-7** — Fold gesture: container transform (SharedTransitionLayout;
   predictive-back needs Compose-MP ≥1.10 — sub-task/risk).
 - **TASK-CL-8** — Related-edges (cross-links / attachment↔email).

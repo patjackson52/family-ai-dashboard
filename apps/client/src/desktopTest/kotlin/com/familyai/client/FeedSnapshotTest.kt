@@ -90,4 +90,30 @@ class FeedSnapshotTest {
   @Test fun inviteRsvpNoneSnapshot() = snapshot("invite-rsvp-none", inviteWith("none"))
   @Test fun inviteRsvpYesSnapshot() = snapshot("invite-rsvp-yes", inviteWith("yes"))
   @Test fun inviteRsvpNoSnapshot() = snapshot("invite-rsvp-no", inviteWith("no"))
+
+  // ── CL-6: DetailScreen per type, light + dark ──────────────────────────────
+  // Reached by opening the corresponding typed card (detailStack = [id]).
+  private fun detailState(id: String) = typedFeed.copy(detailStack = listOf(id))
+
+  private fun detailSnap(name: String, id: String, dark: Boolean = false) = runComposeUiTest {
+    setContent {
+      com.familyai.client.theme.DayfoldTheme(darkTheme = dark) {
+        val c = currentDetailCard(detailState(id))!!
+        com.familyai.client.cards.DetailScreen(c, onBack = {}, onAction = {})
+      }
+    }
+    val img = onRoot().captureToImage()
+    assertTrue(img.width > 0 && img.height > 0)
+    val dir = File("build/snapshots").apply { mkdirs() }
+    ImageIO.write(img.toAwtImage(), "png", File(dir, "$name.png"))
+  }
+
+  @Test fun detailFileSnapshot() = detailSnap("detail-file", "file")
+  @Test fun detailLinkSnapshot() = detailSnap("detail-link", "link")
+  @Test fun detailInviteSnapshot() = detailSnap("detail-invite", "invite")
+  @Test fun detailContactSnapshot() = detailSnap("detail-contact", "contact")
+  @Test fun detailGeoSnapshot() = detailSnap("detail-geo", "geo")
+  @Test fun detailEmailSnapshot() = detailSnap("detail-email", "email")
+  @Test fun detailInviteDarkSnapshot() = detailSnap("detail-invite-dark", "invite", dark = true)
+  @Test fun detailContactDarkSnapshot() = detailSnap("detail-contact-dark", "contact", dark = true)
 }

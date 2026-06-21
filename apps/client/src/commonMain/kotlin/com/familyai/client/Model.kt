@@ -118,6 +118,11 @@ data class AppState(
   val cards: List<Card> = emptyList(),
   val syncing: Boolean = false,
   val error: String? = null,
+  // CL-6 nav: a STACK of card ids (top = current detail, empty = feed). A stack
+  // so related-edges (CL-8) chain detail→detail. Nav is app state (ADR 0013), not
+  // a side channel. Not persisted at M0 → cold start returns to feed (restoring
+  // an open detail across process death is not an M0 requirement).
+  val detailStack: List<String> = emptyList(),
 )
 
 // Actions. Card data reaches the store ONLY via CardsLoaded (the DB→store bridge);
@@ -127,3 +132,6 @@ data object SyncStarted : Action
 data object SyncSucceeded : Action
 data class SyncFailed(val message: String) : Action
 data class CardsLoaded(val cards: List<Card>) : Action
+// CL-6 nav (push if not already top / pop one level).
+data class NavToDetail(val cardId: String) : Action
+data object NavBack : Action

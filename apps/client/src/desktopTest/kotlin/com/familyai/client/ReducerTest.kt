@@ -53,4 +53,29 @@ class ReducerTest {
     store.dispatch(CardsLoaded(listOf(Card("x", title = "X"))))
     assertEquals(1, store.state.cards.size)
   }
+
+  // ── CL-6 nav ────────────────────────────────────────────────────────────────
+
+  @Test fun `NavToDetail pushes, dedups a re-tap of the top, NavBack pops`() {
+    var s = AppState(cards = listOf(Card("a", title = "A"), Card("b", title = "B")))
+    s = rootReducer(s, NavToDetail("a")); assertEquals(listOf("a"), s.detailStack)
+    s = rootReducer(s, NavToDetail("a")); assertEquals(listOf("a"), s.detailStack)   // dedup top
+    s = rootReducer(s, NavToDetail("b")); assertEquals(listOf("a", "b"), s.detailStack)
+    s = rootReducer(s, NavBack); assertEquals(listOf("a"), s.detailStack)
+    s = rootReducer(s, NavBack); assertEquals(emptyList(), s.detailStack)
+    s = rootReducer(s, NavBack); assertEquals(emptyList(), s.detailStack)             // empty-safe
+  }
+
+  @Test fun `CardsLoaded prunes nav-stack ids that synced away`() {
+    var s = AppState(cards = listOf(Card("a", title = "A")), detailStack = listOf("a"))
+    s = rootReducer(s, CardsLoaded(listOf(Card("b", title = "B")))) // 'a' gone
+    assertEquals(emptyList(), s.detailStack)
+  }
+
+  @Test fun `currentDetailCard resolves the top id, null when absent`() {
+    val cards = listOf(Card("a", title = "A"), Card("b", title = "B"))
+    assertNull(currentDetailCard(AppState(cards = cards)))
+    assertEquals("b", currentDetailCard(AppState(cards = cards, detailStack = listOf("a", "b")))?.id)
+    assertNull(currentDetailCard(AppState(cards = cards, detailStack = listOf("gone"))))
+  }
 }

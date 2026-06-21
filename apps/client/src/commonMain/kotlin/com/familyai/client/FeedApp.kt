@@ -2,7 +2,9 @@ package com.familyai.client
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import com.familyai.client.cards.CardAction
+import com.familyai.client.cards.DetailScreen
 import com.familyai.client.theme.DayfoldTheme
 import org.reduxkotlin.Store
 import org.reduxkotlin.compose.selectorState
@@ -13,12 +15,22 @@ import org.reduxkotlin.compose.selectorState
 // Every shell (desktop, Android, iOS) renders this one connected composable,
 // wrapped once in the Dayfold theme (ADR 0022 D5).
 @Composable
-fun FeedApp(store: Store<AppState>, onAction: (CardAction) -> Unit = {}) {
+fun FeedApp(store: Store<AppState>, onPlatformAction: (CardAction) -> Unit = {}) {
   val state by store.selectorState { it }
+  // One stable handler (remembered so feed/detail stay skippable): OpenDetail is
+  // in-app nav → dispatched to the store; every other CardAction is an OS handoff
+  // → the shell's PlatformActions. NOTE: the whole-state `selectorState { it }`
+  // subscription is the pre-existing M0 pattern; scoping it (feedCards vs
+  // currentDetailCard) to shrink recomposition is a tracked perf follow.
+  val handle = remember(store, onPlatformAction) {
+    fun(action: CardAction) { // anonymous fun → Unit return (dispatch returns the action)
+      if (action is CardAction.OpenDetail) store.dispatch(NavToDetail(action.cardId))
+      else onPlatformAction(action)
+    }
+  }
   DayfoldTheme {
-    // CL-PLAT: each shell passes a PlatformActions::perform that turns card
-    // CardActions into OS handoffs. OpenDetail (in-app nav) is routed via the
-    // redux nav layer in CL-6.
-    FeedScreen(state, onAction = onAction)
+    val detail = currentDetailCard(state)
+    if (detail != null) DetailScreen(detail, onBack = { store.dispatch(NavBack) }, onAction = handle)
+    else FeedScreen(state, onAction = handle)
   }
 }
