@@ -10,7 +10,9 @@ import androidx.compose.ui.test.performTextInput
 import com.familyai.client.AppState
 import com.familyai.client.FamilyCreated
 import com.familyai.client.FeedApp
+import com.familyai.client.InviteRedeemed
 import com.familyai.client.MembershipsLoaded
+import com.familyai.client.RedeemRequested
 import com.familyai.client.Route
 import com.familyai.client.Session
 import com.familyai.client.SignInSucceeded
@@ -63,5 +65,34 @@ class AuthFlowE2ETest {
 
     // 5) Back at the sign-in screen — the loop is closed
     rule.onNodeWithText("Continue with Google").assertIsDisplayed()
+  }
+
+  @Test fun signIn_joinByInvite_waitsForApproval() {
+    val store = createAppStore(AppState(route = Route.SignIn), debug = false)
+    rule.setContent {
+      DayfoldTheme {
+        FeedApp(
+          store,
+          onSignIn = {
+            store.dispatch(SignInSucceeded(Session("a", "r")))
+            store.dispatch(MembershipsLoaded(emptyList()))
+          },
+          onRedeemInvite = { token ->
+            store.dispatch(RedeemRequested(token))
+            store.dispatch(InviteRedeemed("The Riveras"))
+          },
+        )
+      }
+    }
+
+    rule.onNodeWithText("Continue with Google").performClick()
+    rule.onNodeWithText("Name your family").assertIsDisplayed()
+    rule.onNodeWithText("Have an invite? Join a family").performClick()
+    rule.onNodeWithText("Join a family").assertIsDisplayed()
+    rule.onNode(hasSetTextAction()).performTextInput("INVITE-TOKEN-123")
+    rule.onNodeWithText("Join").performClick()
+    rule.onNodeWithText("Almost in").assertIsDisplayed()   // waiting for owner approval
+    rule.onNodeWithText("Done").performClick()
+    rule.onNodeWithText("Name your family").assertIsDisplayed()
   }
 }

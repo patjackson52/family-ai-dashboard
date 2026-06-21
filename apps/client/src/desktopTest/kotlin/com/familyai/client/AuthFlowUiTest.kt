@@ -64,4 +64,41 @@ class AuthFlowUiTest {
     waitUntil(timeoutMillis = 5_000L) { seen("Continue with Google") }
     onNodeWithText("Continue with Google").assertIsDisplayed()
   }
+
+  @Test fun signIn_joinByInvite_waitsForApproval() = runComposeUiTest {
+    val store = createAppStore(AppState(route = Route.SignIn), debug = false)
+    setContent {
+      DayfoldTheme {
+        FeedApp(
+          store,
+          onSignIn = {
+            store.dispatch(SignInSucceeded(Session("a", "r")))
+            store.dispatch(MembershipsLoaded(emptyList()))      // signed in, no family → CreateFamily
+          },
+          onRedeemInvite = { token ->
+            store.dispatch(RedeemRequested(token))
+            store.dispatch(InviteRedeemed("The Riveras"))        // success → pending, waiting for approval
+          },
+        )
+      }
+    }
+    fun seen(text: String) = onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+
+    // sign in → onboarding
+    onNodeWithText("Continue with Google").performClick()
+    waitUntil(timeoutMillis = 5_000L) { seen("Name your family") }
+
+    // take the invitee path → paste a token → join
+    onNodeWithText("Have an invite? Join a family").performClick()
+    waitUntil(timeoutMillis = 5_000L) { seen("Join a family") }
+    onNode(hasSetTextAction()).performTextInput("INVITE-TOKEN-123")
+    onNodeWithText("Join").performClick()
+
+    // waiting-for-approval state (every invite is owner-approved)
+    waitUntil(timeoutMillis = 5_000L) { seen("Almost in") }
+
+    // dismiss → back to the onboarding gate
+    onNodeWithText("Done").performClick()
+    waitUntil(timeoutMillis = 5_000L) { seen("Name your family") }
+  }
 }
