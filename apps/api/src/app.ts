@@ -116,6 +116,36 @@ app.get("/auth/whoami", async (c) => {
   return c.json({ family_id, families: r.rows });
 });
 
+// Profile — the caller's own display name. (Memberships live in /auth/whoami.)
+app.get("/auth/me", async (c) => {
+  const t = bearer(c); if (!t) return c.body(null, 401);
+  let sub: string, cid: string;
+  try { const { verifyAccess } = await import("./auth/tokens.ts"); ({ sub, cid } = await verifyAccess(t)); }
+  catch { return c.body(null, 401); }
+  const cred = await q(`SELECT 1 FROM credentials WHERE id=$1 AND revoked_at IS NULL`, [cid]);
+  if (!cred || cred.rowCount === 0) return c.body(null, 401);
+  const u = (await q(`SELECT id, display_name FROM users WHERE id=$1 AND deleted_at IS NULL`, [sub])).rows[0];
+  if (!u) return c.body(null, 401);
+  return c.json({ user_id: u.id, display_name: u.display_name });
+});
+
+// Update the caller's own display name (1–80 chars after trim).
+app.patch("/auth/me", async (c) => {
+  const t = bearer(c); if (!t) return c.body(null, 401);
+  let sub: string, cid: string;
+  try { const { verifyAccess } = await import("./auth/tokens.ts"); ({ sub, cid } = await verifyAccess(t)); }
+  catch { return c.body(null, 401); }
+  const cred = await q(`SELECT 1 FROM credentials WHERE id=$1 AND revoked_at IS NULL`, [cid]);
+  if (!cred || cred.rowCount === 0) return c.body(null, 401);
+  const body = await c.req.json().catch(() => null);
+  const name = typeof body?.display_name === "string" ? body.display_name.trim() : null;
+  if (!name || name.length < 1 || name.length > 80) return c.json({ type: "bad-display-name" }, 400);
+  const r = await q(
+    `UPDATE users SET display_name=$1, updated_at=now() WHERE id=$2 AND deleted_at IS NULL RETURNING display_name`, [name, sub]);
+  if (r.rowCount === 0) return c.body(null, 401);
+  return c.json({ display_name: r.rows[0].display_name });
+});
+
 // Data export (guardrail #4 — honor data-export on request). The caller's own
 // data only; NO secrets (refresh hashes, token hashes) ever leave. Read-only.
 app.get("/auth/me/export", async (c) => {
