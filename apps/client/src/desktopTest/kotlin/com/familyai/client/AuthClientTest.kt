@@ -178,4 +178,37 @@ class AuthClientTest {
     val ex = assertFailsWith<AuthHttpException> { client(engine).approveMember("A", "f", "u") }
     assertEquals(404, ex.status)
   }
+
+  // ── roster ──
+  @Test fun `familyMembers parses the active roster`() = runBlocking {
+    var path = ""
+    val engine = MockEngine { req ->
+      path = req.url.encodedPath
+      respond(
+        """{"members":[
+          {"uid":"u1","display_name":"Pat","role":"owner","status":"active","joined_at":"2026-06-01T00:00:00Z"},
+          {"uid":"u2","display_name":"Maya","role":"adult","status":"active"}]}""",
+        HttpStatusCode.OK, jsonCt,
+      )
+    }
+    val m = client(engine).familyMembers("ACCESS", "fam1")
+    assertEquals("/families/fam1/members", path)
+    assertEquals(2, m.size)
+    assertEquals("owner", m[0].role)
+    assertEquals("Maya", m[1].displayName)
+  }
+
+  @Test fun `removeMember deletes and accepts 204`() = runBlocking {
+    var method = ""; var path = ""
+    val engine = MockEngine { req -> method = req.method.value; path = req.url.encodedPath; respond("", HttpStatusCode.NoContent) }
+    client(engine).removeMember("ACCESS", "fam1", "u2")
+    assertEquals("DELETE", method)
+    assertEquals("/families/fam1/members/u2", path)
+  }
+
+  @Test fun `removeMember throws on 409 (last owner)`() = runBlocking<Unit> {
+    val engine = MockEngine { respond("", HttpStatusCode.Conflict) }
+    val ex = assertFailsWith<AuthHttpException> { client(engine).removeMember("A", "f", "u") }
+    assertEquals(409, ex.status)
+  }
 }

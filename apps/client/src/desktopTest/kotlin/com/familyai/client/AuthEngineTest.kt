@@ -173,4 +173,26 @@ class AuthEngineTest {
     AuthEngine(store, client, MemTokenStore(Session("a", "r"))).approveMember("fam1", "u9")
     assertEquals(listOf("u8"), store.state.pendingApprovals.map { it.uid })
   }
+
+  @Test fun `loadMembers fills the roster`() = runBlocking {
+    val store = createAppStore(AppState(session = Session("a", "r")), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { req ->
+      if (req.url.encodedPath == "/families/fam1/members")
+        respond("""{"members":[{"uid":"u1","display_name":"Pat","role":"owner"}]}""", HttpStatusCode.OK, jsonCt)
+      else respond("", HttpStatusCode.NotFound)
+    }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).loadMembers("fam1")
+    assertEquals(1, store.state.members.size)
+    assertEquals("u1", store.state.members[0].uid)
+  }
+
+  @Test fun `removeMember drops from the roster on success`() = runBlocking {
+    val store = createAppStore(
+      AppState(session = Session("a", "r"), members = listOf(FamilyMember("u1", "Pat", role = "owner"), FamilyMember("u2", "Maya"))),
+      debug = false,
+    )
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.NoContent) }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).removeMember("fam1", "u2")
+    assertEquals(listOf("u1"), store.state.members.map { it.uid })
+  }
 }

@@ -1,6 +1,7 @@
 package com.familyai.client
 
 import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -44,6 +45,7 @@ class AuthClient(
   )
   @Serializable private data class ConflictResp(val type: String? = null)
   @Serializable private data class ApprovalsResp(val pending: List<PendingMember> = emptyList())
+  @Serializable private data class MembersResp(val members: List<FamilyMember> = emptyList())
 
   /** POST /auth/dev-token (Bearer DEV_AUTH_SECRET) → a real backend session. Dev/test only. */
   suspend fun devToken(provider: String, providerUid: String, devSecret: String): Session {
@@ -133,7 +135,30 @@ class AuthClient(
     // 204 done · 200 already-active (idempotent) — both fine; 4xx/5xx surface.
     if (resp.status.value !in 200..204) throw AuthHttpException(resp.status.value, "member-$action")
   }
+
+  /** GET /families/{fid}/members (member-gated) → the active roster. */
+  suspend fun familyMembers(access: String, fid: String): List<FamilyMember> {
+    val resp = http.get("$api/families/$fid/members") { header("authorization", "Bearer $access") }
+    if (resp.status.value != 200) throw AuthHttpException(resp.status.value, "family-members")
+    return json.decodeFromString(MembersResp.serializer(), resp.bodyAsText()).members
+  }
+
+  /** DELETE /families/{fid}/members/{uid} — owner removes a member (409 = last owner). */
+  suspend fun removeMember(access: String, fid: String, uid: String) {
+    val resp = http.delete("$api/families/$fid/members/$uid") { header("authorization", "Bearer $access") }
+    if (resp.status.value !in 200..204) throw AuthHttpException(resp.status.value, "remove-member")
+  }
 }
+
+// An active member of a family (GET /families/{fid}/members → members[]).
+@Serializable
+data class FamilyMember(
+  val uid: String,
+  @SerialName("display_name") val displayName: String? = null,
+  val role: String = "adult",
+  val status: String = "active",
+  @SerialName("joined_at") val joinedAt: String? = null,
+)
 
 // A member awaiting the owner's approval (GET /families/{fid}/invites → pending[]).
 @Serializable

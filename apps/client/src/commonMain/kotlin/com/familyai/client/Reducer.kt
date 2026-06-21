@@ -84,6 +84,8 @@ fun rootReducer(state: AppState, action: Any): AppState = when (action) {
 
   // ── owner-side approvals (S6) ──
   is OpenMembers -> state.copy(route = Route.Members)
+  is RosterLoaded -> state.copy(members = action.members)
+  is MemberRemoved -> state.copy(members = state.members.filterNot { it.uid == action.uid })
   is ApprovalsRequested -> state.copy(approvalsBusy = true)
   is ApprovalsLoaded -> state.copy(approvalsBusy = false, pendingApprovals = action.pending)
   is MemberResolved -> state.copy(pendingApprovals = state.pendingApprovals.filterNot { it.uid == action.uid })

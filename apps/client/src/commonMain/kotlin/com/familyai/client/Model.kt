@@ -181,6 +181,8 @@ data class AppState(
   // owner-side approvals (S6). The pending-member queue + a busy flag.
   val pendingApprovals: List<PendingMember> = emptyList(),
   val approvalsBusy: Boolean = false,
+  // the active member roster (GET /members).
+  val members: List<FamilyMember> = emptyList(),
 )
 
 // Actions. Card data reaches the store ONLY via CardsLoaded (the DB→store bridge);
@@ -220,6 +222,8 @@ data class InviteRejected(val reason: String) : Action        // expired | locke
 data object JoinDismissed : Action                            // leave the join flow → back to the gate
 // owner-side approvals (S6). Load the queue; resolve removes one (approved/declined).
 data object OpenMembers : Action                              // → the family members/approvals screen
+data class RosterLoaded(val members: List<FamilyMember>) : Action  // active member roster (GET /members)
+data class MemberRemoved(val uid: String) : Action            // owner removed a member → drop from roster
 data object ApprovalsRequested : Action
 data class ApprovalsLoaded(val pending: List<PendingMember>) : Action
 data class MemberResolved(val uid: String) : Action           // approved or declined → drop from the queue

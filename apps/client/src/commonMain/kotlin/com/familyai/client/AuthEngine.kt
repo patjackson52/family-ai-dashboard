@@ -117,6 +117,25 @@ class AuthEngine(
     }
   }
 
+  /** Load the active member roster for a family. */
+  suspend fun loadMembers(fid: String) = mutex.withLock {
+    val session = store.state.session ?: return@withLock
+    try {
+      store.dispatch(RosterLoaded(callWithRefresh(session) { authClient.familyMembers(it.access, fid) }))
+    } catch (e: Exception) { /* keep the last roster; a retry/load reconciles */ }
+  }
+
+  /** Owner removes a member → drop from the roster on success (409 last-owner → reload). */
+  suspend fun removeMember(fid: String, uid: String) = mutex.withLock {
+    val session = store.state.session ?: return@withLock
+    try {
+      callWithRefresh(session) { authClient.removeMember(it.access, fid, uid) }
+      store.dispatch(MemberRemoved(uid))
+    } catch (e: Exception) {
+      store.dispatch(RosterLoaded(runCatching { callWithRefresh(session) { authClient.familyMembers(it.access, fid) } }.getOrDefault(store.state.members)))
+    }
+  }
+
   /** Current access token (for the SyncClient token provider, wired at T6). */
   fun accessToken(): String? = store.state.session?.access
 

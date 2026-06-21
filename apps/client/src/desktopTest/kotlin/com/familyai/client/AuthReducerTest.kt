@@ -122,6 +122,13 @@ class AuthReducerTest {
     assertEquals(listOf("u8"), s.pendingApprovals.map { it.uid })   // approved/declined → dropped
   }
 
+  @Test fun `roster loads then a member is removed`() {
+    var s = rootReducer(AppState(), RosterLoaded(listOf(FamilyMember("u1", "Pat", role = "owner"), FamilyMember("u2", "Maya"))))
+    assertEquals(listOf("u1", "u2"), s.members.map { it.uid })
+    s = rootReducer(s, MemberRemoved("u2"))
+    assertEquals(listOf("u1"), s.members.map { it.uid })
+  }
+
   @Test fun `sign-out clears session and feed back to SignIn`() {
     val signedIn = AppState(
       cards = listOf(Card("c", title = "T")), session = sess,
