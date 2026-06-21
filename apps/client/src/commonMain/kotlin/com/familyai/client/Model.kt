@@ -178,6 +178,9 @@ data class AppState(
   val joinBusy: Boolean = false,
   val joinOutcome: String? = null,
   val joinFamilyName: String? = null,
+  // owner-side approvals (S6). The pending-member queue + a busy flag.
+  val pendingApprovals: List<PendingMember> = emptyList(),
+  val approvalsBusy: Boolean = false,
 )
 
 // Actions. Card data reaches the store ONLY via CardsLoaded (the DB→store bridge);
@@ -215,3 +218,8 @@ data class RedeemRequested(val token: String) : Action
 data class InviteRedeemed(val familyName: String?) : Action   // success → pending, waiting for approval
 data class InviteRejected(val reason: String) : Action        // expired | locked | already | removed | error
 data object JoinDismissed : Action                            // leave the join flow → back to the gate
+// owner-side approvals (S6). Load the queue; resolve removes one (approved/declined).
+data object ApprovalsRequested : Action
+data class ApprovalsLoaded(val pending: List<PendingMember>) : Action
+data class MemberResolved(val uid: String) : Action           // approved or declined → drop from the queue
+data object ApprovalsFailed : Action

@@ -150,4 +150,27 @@ class AuthEngineTest {
     assertEquals("removed", redeemOutcome(HttpStatusCode.Conflict, """{"type":"removed"}""").first)
     assertEquals("error", redeemOutcome(HttpStatusCode.InternalServerError, "").first)  // transient → join-retry
   }
+
+  // ── owner-side approvals ──
+  @Test fun `loadApprovals fills the pending queue`() = runBlocking {
+    val store = createAppStore(AppState(session = Session("a", "r")), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { req ->
+      if (req.url.encodedPath == "/families/fam1/invites")
+        respond("""{"invites":[],"pending":[{"uid":"u9","display_name":"Sam Rivera","role":"adult"}]}""", HttpStatusCode.OK, jsonCt)
+      else respond("", HttpStatusCode.NotFound)
+    }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).loadApprovals("fam1")
+    assertEquals(1, store.state.pendingApprovals.size)
+    assertEquals("u9", store.state.pendingApprovals[0].uid)
+  }
+
+  @Test fun `approveMember drops the member from the queue`() = runBlocking {
+    val store = createAppStore(
+      AppState(session = Session("a", "r"), pendingApprovals = listOf(PendingMember("u9", "Sam"), PendingMember("u8", "Mo"))),
+      debug = false,
+    )
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.NoContent) }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).approveMember("fam1", "u9")
+    assertEquals(listOf("u8"), store.state.pendingApprovals.map { it.uid })
+  }
 }

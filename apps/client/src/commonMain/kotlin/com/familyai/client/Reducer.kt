@@ -82,6 +82,12 @@ fun rootReducer(state: AppState, action: Any): AppState = when (action) {
     route = routeFor(state.session, state.families),    // exit the join flow → gate (CreateFamily/Feed)
   )
 
+  // ── owner-side approvals (S6) ──
+  is ApprovalsRequested -> state.copy(approvalsBusy = true)
+  is ApprovalsLoaded -> state.copy(approvalsBusy = false, pendingApprovals = action.pending)
+  is MemberResolved -> state.copy(pendingApprovals = state.pendingApprovals.filterNot { it.uid == action.uid })
+  is ApprovalsFailed -> state.copy(approvalsBusy = false)
+
   else -> state
 }
 

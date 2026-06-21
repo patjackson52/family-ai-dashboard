@@ -92,6 +92,31 @@ class AuthEngine(
     }
   }
 
+  /** Owner: load the pending-approval queue for a family. */
+  suspend fun loadApprovals(fid: String) = mutex.withLock {
+    val session = store.state.session ?: return@withLock
+    store.dispatch(ApprovalsRequested)
+    try {
+      store.dispatch(ApprovalsLoaded(callWithRefresh(session) { authClient.familyApprovals(it.access, fid) }))
+    } catch (e: Exception) {
+      store.dispatch(ApprovalsFailed)
+    }
+  }
+
+  /** Owner: approve / decline a pending member → drop them from the queue on success. */
+  suspend fun approveMember(fid: String, uid: String) = resolveMember(fid, uid, approve = true)
+  suspend fun declineMember(fid: String, uid: String) = resolveMember(fid, uid, approve = false)
+
+  private suspend fun resolveMember(fid: String, uid: String, approve: Boolean) = mutex.withLock {
+    val session = store.state.session ?: return@withLock
+    try {
+      callWithRefresh(session) { if (approve) authClient.approveMember(it.access, fid, uid) else authClient.declineMember(it.access, fid, uid) }
+      store.dispatch(MemberResolved(uid))
+    } catch (e: Exception) {
+      store.dispatch(ApprovalsFailed)   // already-handled / transient → the next load reconciles
+    }
+  }
+
   /** Current access token (for the SyncClient token provider, wired at T6). */
   fun accessToken(): String? = store.state.session?.access
 

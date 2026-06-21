@@ -112,6 +112,16 @@ class AuthReducerTest {
     assertEquals("expired", rejected.joinOutcome); assertFalse(rejected.joinBusy)
   }
 
+  @Test fun `owner approvals queue loads and resolves`() {
+    var s = rootReducer(AppState(), ApprovalsRequested)
+    assertTrue(s.approvalsBusy)
+    s = rootReducer(s, ApprovalsLoaded(listOf(PendingMember("u9", "Sam"), PendingMember("u8", "Mo"))))
+    assertFalse(s.approvalsBusy)
+    assertEquals(listOf("u9", "u8"), s.pendingApprovals.map { it.uid })
+    s = rootReducer(s, MemberResolved("u9"))
+    assertEquals(listOf("u8"), s.pendingApprovals.map { it.uid })   // approved/declined → dropped
+  }
+
   @Test fun `sign-out clears session and feed back to SignIn`() {
     val signedIn = AppState(
       cards = listOf(Card("c", title = "T")), session = sess,
