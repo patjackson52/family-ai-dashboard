@@ -1,0 +1,68 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import { generateKeyPair, exportJWK } from "jose";
+const here = dirname(fileURLToPath(import.meta.url));
+process.env.DATABASE_URL ||= "postgres:///fad_test";
+process.env.AUTH_ISS = "https://fad.test/auth"; process.env.AUTH_AUD = "fad-api-test";
+process.env.ENABLE_DEV_AUTH = "1"; process.env.DEV_AUTH_SECRET = "dev"; delete process.env.VERCEL_ENV;
+const kp = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
+const priv = await exportJWK(kp.privateKey); priv.kid = "k1"; priv.alg = "EdDSA";
+process.env.AUTH_SIGNING_KEY = JSON.stringify(priv);
+const { pool, q } = await import("../src/db.ts");
+const { app } = await import("../src/app.ts");
+const { sweep } = await import("../src/auth/sweep.ts");
+
+beforeAll(async () => {
+  await q(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
+  for (const m of ["0001_m0_init.sql","0002_auth.sql","0003_device_grant.sql","0004_refresh_grace.sql","0005_invites.sql"])
+    await q(readFileSync(resolve(here, "../migrations/"+m), "utf8"));
+});
+afterAll(async () => { await pool.end(); });
+
+const dev = { "content-type":"application/json", authorization:"Bearer dev" };
+async function ownerOf(uid: string) {
+  const t = (await (await app.request("/auth/dev-token",{method:"POST",headers:dev,body:JSON.stringify({provider:"dev",provider_uid:uid})})).json()).access;
+  const fam = await (await app.request("/families",{method:"POST",headers:{...dev,authorization:`Bearer ${t}`},body:JSON.stringify({name:uid})})).json();
+  return { token: t, familyId: fam.familyId };
+}
+
+describe("retention sweep", () => {
+  it("purges expired rate_limits + terminal device codes, keeps fresh ones", async () => {
+    const old = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+    await q(`INSERT INTO rate_limits(key, window_start, count) VALUES ('old:rl', $1, 9)`, [old]);   // dead
+    await q(`INSERT INTO rate_limits(key, window_start, count) VALUES ('fresh:rl', now(), 1)`);     // keep
+    await q(`INSERT INTO rate_limits(key, window_start, count, locked_until) VALUES ('locked:rl', $1, 9, now() + interval '1 hour')`, [old]); // keep (still locked)
+    await q(`INSERT INTO device_authorizations(device_code, user_code, status, created_at, expires_at) VALUES ('dc_old','UC1','expired',$1,$1)`, [old]); // dead
+    await q(`INSERT INTO device_authorizations(device_code, user_code, status, created_at, expires_at) VALUES ('dc_fresh','UC2','pending',now(), now() + interval '10 min')`); // keep
+
+    const r = await sweep();
+    expect(r.rate_limits).toBeGreaterThanOrEqual(1);
+    expect(r.device_authorizations).toBeGreaterThanOrEqual(1);
+    expect((await q(`SELECT 1 FROM rate_limits WHERE key='old:rl'`)).rowCount).toBe(0);
+    expect((await q(`SELECT 1 FROM rate_limits WHERE key='fresh:rl'`)).rowCount).toBe(1);
+    expect((await q(`SELECT 1 FROM rate_limits WHERE key='locked:rl'`)).rowCount).toBe(1);   // lock still active
+    expect((await q(`SELECT 1 FROM device_authorizations WHERE device_code='dc_old'`)).rowCount).toBe(0);
+    expect((await q(`SELECT 1 FROM device_authorizations WHERE device_code='dc_fresh'`)).rowCount).toBe(1);
+  });
+
+  it("deletes an orphan expired invite but KEEPS one a membership references", async () => {
+    const o = await ownerOf("sweepowner");
+    // a redeemed invite → a pending membership references it (used_count=1)
+    const mk = await (await app.request(`/families/${o.familyId}/invites`, { method:"POST", headers:{...dev,authorization:`Bearer ${o.token}`}, body: JSON.stringify({ mode:"link", max_uses:5 }) })).json();
+    const invitee = (await (await app.request("/auth/dev-token",{method:"POST",headers:dev,body:JSON.stringify({provider:"dev",provider_uid:"sweep-invitee"})})).json()).access;
+    const red = await app.request("/invites:redeem", { method:"POST", headers:{...dev,authorization:`Bearer ${invitee}`}, body: JSON.stringify({ token: mk.token }) });
+    expect(red.status).toBe(200);
+    // force both invites into the past
+    await q(`UPDATE invites SET expires_at = now() - interval '2 days' WHERE id=$1`, [mk.invite_id]);
+    // an orphan, never-redeemed, expired invite
+    const orphan = await (await app.request(`/families/${o.familyId}/invites`, { method:"POST", headers:{...dev,authorization:`Bearer ${o.token}`}, body: JSON.stringify({ mode:"link", max_uses:5 }) })).json();
+    await q(`UPDATE invites SET status='expired', expires_at = now() - interval '2 days' WHERE id=$1`, [orphan.invite_id]);
+
+    const r = await sweep();
+    expect(r.invites).toBeGreaterThanOrEqual(1);
+    expect((await q(`SELECT 1 FROM invites WHERE id=$1`, [orphan.invite_id])).rowCount).toBe(0);   // orphan gone
+    expect((await q(`SELECT 1 FROM invites WHERE id=$1`, [mk.invite_id])).rowCount).toBe(1);        // referenced kept (FK-safe)
+  });
+});
