@@ -279,6 +279,46 @@ API tests / 0 skips. Legacy household token still works.
     already-member + provider-link-conflict) · **S6** (invite gen, authorize-device,
     members+approvals, devices, account) · **S2** (real Firebase Google/Apple behind
     the same buttons — gate cleared by ADR 0023).
+
+### AUTH-S5/S6 — full status as of 2026-06-21 (post slice-1)
+
+Built across a /loop run; **the client auth/account/family surface is
+comprehensive and e2e-tested on a real emulator** (`fad_atd35`, API-35 AOSP ATD
+— provisioned because the on-hand emulators were API 37, which espresso can't
+drive). **4 instrumented `AuthFlowE2ETest` cases pass on-device:** sign-in →
+create-family → feed → account → **sign-out (confirm)** · **join-by-invite** →
+waiting · owner **approve + remove** · **connected-device revoke**. Mirror desktop
+`AuthFlowUiTest` (runComposeUiTest) is the default-loop e2e.
+
+**MERGED to `main`:**
+- S5 slice-1 (PR #6); A8b gap designs (#8); ADR 0025 auth rate-limit constants (#10);
+  members/approvals 3c+4a+4b backend (#12); **data-export `GET /auth/me/export`**
+  + **connected-devices backend** `GET`/`DELETE /auth/me/credentials` (#13).
+- **Slice A** AccountScreen + sign-out · **B** e2e harness + fixed inert AuthButton
+  bug · **C** sign-out confirm · **2a-2c** invitee-join (transport/UI/e2e) ·
+  **3a-3c** owner approvals (queue + approve/decline + screen) · **4a-4c** member
+  roster (GET /members + render + remove).
+
+**OPEN PRs (awaiting operator review/merge):**
+- **#15** connected-devices client (`DevicesScreen` + revoke, e2e on emulator).
+- **#16** profile endpoints (`GET`/`PATCH /auth/me` display name).
+- **#17** retention sweep (`sweep()` expired rate_limits/device-codes/orphan invites;
+  resolves the S3/S4 sweep follow).
+
+**GATED — needs the operator (not agent-decidable):**
+- **Account-delete** — the inert AccountScreen button + designed `deleteconfirm`/
+  `transferowner`. Permanent data deletion + the schema needs a policy call:
+  `credentials`/`family_scope` have no ON-DELETE cascade; sole-owner = block-and-
+  transfer vs auto-delete-family; soft (`users.deleted_at`) vs hard. **Escalated;
+  not built pending the approach decision.**
+- **AUTH-S2 Firebase** — real Google/Apple behind the stubbed dev-token buttons
+  (ADR 0023 cleared the vendor scope; needs the Firebase project/console step).
+  Editable-name client (#16's UI) + provider display names land with S2.
+
+**Resolved earlier follows:** sign-out affordance (Slice A/C); invitelocked
+constant (ADR 0025); the retention sweep (#17). **Still open:** `SyncEngine`
+401→refresh hook (mid-session); secure token stores (EncryptedSharedPreferences/
+Keychain); the instrumented e2e needs a ≤API-36 emulator (CI note).
 - **A8b failure/destructive design gaps — ✅ CLOSED + IMPORTED 2026-06-21** (Claude
   Design pass from `designs/DESIGN-BRIEF-auth-gaps.md`, pulled via the claude_design
   MCP). `Auth-Phone.dc.html` now **25 views** (18 → +7): **slice-2 invitee
