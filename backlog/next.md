@@ -10,6 +10,17 @@ Populated at bootstrap and by loop close-outs.
 
 ## CONTENT LIBRARY + DETAIL + FOLD GESTURE (ADR 0022 — Accepted 2026-06-19)
 
+> **STATUS 2026-06-21 — M0 build order EXHAUSTED + MERGED TO MAIN** (PR #7
+> `cl-integrate`: CL-0…CL-8 + CL-PLAT + CL-3, with auth S1–S5). The
+> per-task `NEXT = …` breadcrumbs below are **historical** (state when each
+> task closed), not the live front. Remaining content items are all
+> deferred/blocked: **CL-9** spike done → decision recorded (impl = M0
+> placeholder; **CL-9b** real map deferred to M1, ADR-gated); **CL-10** /
+> **CL-NAV** blocked on operator design sign-off (INB-16) + a Claude-Design
+> adaptive-detail pass; **CL-0b** (fonts + MaterialExpressive) gated on the
+> material3-expressive artifact @1.9.3. Next non-content buildable = **TASK-KMP**
+> (but it contends with the live auth lane + needs the operator's Mac for iOS).
+
 From the Claude Design import (`designs/content/*`, `designs/Brand.dc.html`).
 **Full breakdown + DoD + file touchpoints: `planning/content-detail-epic.md`.**
 **Gates CLEARED (INB-15/16/17/18):** ADR 0022 accepted · **D2 = extend
@@ -195,7 +206,22 @@ blocked** behind a queued Claude-Design expanded-detail pass.
   `docs/superpowers/specs/2026-06-20-cl-8-related-edges-design.md`. **Follow
   (minor):** unbounded A→B→A stack chaining (acceptable M0); resolving live
   title/sub vs denormalized.
-- **TASK-CL-9** — Map-render strategy spike (ADR 0014 privacy posture).
+- **TASK-CL-9** — Map-render strategy spike (ADR 0014 privacy posture). ✅
+  **SPIKE DONE + DECISION RECORDED** 2026-06-21
+  (`docs/superpowers/specs/2026-06-21-cl-9-map-render-spike.md`). **Decision:
+  M0 = keep the stylized `MapStrip()` placeholder + Navigate handoff** — no
+  key, no cost, no third-party coord leak; the impl + handoff already shipped
+  (CL-5/CL-6/CL-PLAT), so the DoD is met with **no code change** (navigate
+  test re-run green). Evaluated static-image (Geoapify/Stadia cheapest +
+  caching-allowed; Google forbids image caching) vs embedded SDK (rejected:
+  heavy/per-platform/leaks viewport) vs placeholder (chosen). **Key finding:**
+  a static-map call transmits the authored *place coordinate* to a **third
+  party** (and into its request logs) — a data flow ADR 0014 never authorized
+  → **ADR-class, operator-gated.** Twice-reviewed (pre-impl adversarial +
+  fixes folded). **Follow `CL-9b` (deferred, M1):** author-time-stamped static
+  map image (CL-2 OG-unfurl pattern: no server/client render-time fetch),
+  behind a **new ADR** for third-party map-provider disclosure + provider-
+  logging exposure + chip-honesty audit.
 - **TASK-CL-10** — Adaptive two-pane detail — **BLOCKED** on a Claude-Design
   expanded-detail pass (design gap; phone-only designed).
 

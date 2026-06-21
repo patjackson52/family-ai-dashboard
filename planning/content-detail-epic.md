@@ -278,6 +278,13 @@ holds.
 
 ## CL-9 — Map render strategy (spike → impl)
 
+> ✅ **DECIDED 2026-06-21** — `docs/superpowers/specs/2026-06-21-cl-9-map-render-spike.md`.
+> **M0 = keep the stylized `MapStrip()` placeholder + Navigate handoff** (already
+> shipped; no key/cost/third-party coord leak; DoD met, no code change). Real
+> map = **CL-9b**, deferred to M1 behind a **new ADR** (third-party map-provider
+> disclosure + provider-logging exposure); author-time-stamp the image per the
+> CL-2 OG-unfurl pattern; Geoapify/Stadia favored (caching-allowed), Google out.
+
 **Goal:** Decide + implement the geo card/detail map (currently a CSS
 placeholder).
 **Scope:** evaluate **static map image** (privacy-friendly, one image; provider
