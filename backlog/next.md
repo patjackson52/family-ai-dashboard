@@ -288,8 +288,11 @@ API tests / 0 skips. Legacy household token still works.
   `devicedenied` / `deviceexpired`. Gallery = 37 frames (light+dark). Verified
   render-valid (tags 29/29·7/7·277/277, all views through `renderVals()`, token
   parity, frames ∈ enum). **Slice-2 now has full happy+failure design coverage;
-  S6 destructive-action screens designed.** Operator sign-off (ADR 0008) → build.
-  *(Open TODO from the pass: confirm the invitelocked cooldown constant vs S4.)*
+  S6 destructive-action screens designed.** **✅ Operator signed off (ADR 0008)
+  2026-06-21 — design gate CLEARED for slice-2 + the S6 screens; build may
+  proceed.** Invitelocked cooldown constant resolved: **5 fails / 15 min →
+  15-min lock** (matches S4 `app.ts:286`), recorded in **ADR 0025** (auth
+  abuse-control constants) + the screen copy says "~15 min".
 
 **AUTH-S3 (CLI device grant, RFC 8628) — ✅ DONE + MERGED** to `main` 2026-06-19
 (PR #2, all CI green). `/device/{authorize,token}` + `/families/:fid/device/{approve,deny}`

@@ -82,7 +82,7 @@ class Component extends DCLogic {
 
         { title: 'A1 · Declined by owner', mode: 'light', view: 'invitedeclined', note: 'Owner tapped Decline — calm, low-blame, no self-retry.', ...L },
         { title: 'A1 · Declined by owner', mode: 'dark', view: 'invitedeclined', note: 'Same, dark theme.', ...D },
-        { title: 'A2 · Too many attempts', mode: 'light', view: 'invitelocked', note: 'Redeem lockout (429) — cooldown, no accusation. [TODO: confirm constant]', ...L },
+        { title: 'A2 · Too many attempts', mode: 'light', view: 'invitelocked', note: 'Redeem lockout (429) — 5 fails / 15 min → 15-min cooldown (ADR 0025).', ...L },
         { title: 'A2 · Too many attempts', mode: 'dark', view: 'invitelocked', note: 'Same, dark theme.', ...D },
         { title: 'A3 · Couldn’t join — retry', mode: 'light', view: 'joinerror', note: 'Transient 5xx/network drop in the join flow — primary Try again.', ...L },
         { title: 'A3 · Couldn’t join — retry', mode: 'dark', view: 'joinerror', note: 'Same, dark theme.', ...D },
