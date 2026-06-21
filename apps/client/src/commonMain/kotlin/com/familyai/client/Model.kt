@@ -150,7 +150,7 @@ data class FamilyMembership(
 // The app's first navigation surface (ADR 0013: f(state)→UI, no nav library).
 // Family-null is a Feed SUBSTATE (the active family has no members yet), not a
 // route — keeps the gate minimal.
-enum class Route { Loading, SignIn, CreateFamily, Feed, Account, JoinInvite, Members }
+enum class Route { Loading, SignIn, CreateFamily, Feed, Account, JoinInvite, Members, Devices }
 
 // Redux state (client state tree). The feed cursor lives in the DB (sync_meta),
 // not here — the store is a projection of the DB. The auth fields below are the
@@ -226,6 +226,7 @@ data object JoinDismissed : Action                            // leave the join 
 data object OpenMembers : Action                              // → the family members/approvals screen
 data class RosterLoaded(val members: List<FamilyMember>) : Action  // active member roster (GET /members)
 data class MemberRemoved(val uid: String) : Action            // owner removed a member → drop from roster
+data object OpenDevices : Action                              // → the connected-devices screen
 data class DevicesLoaded(val devices: List<DeviceCredential>) : Action  // connected devices/apps
 data class DeviceRevoked(val id: String) : Action             // revoked a credential → drop from the list
 data object ApprovalsRequested : Action

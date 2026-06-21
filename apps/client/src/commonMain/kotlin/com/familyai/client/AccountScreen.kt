@@ -44,6 +44,7 @@ fun AccountScreen(
   onSignOut: () -> Unit = {},
   onClose: () -> Unit = {},
   onOpenMembers: () -> Unit = {},
+  onOpenDevices: () -> Unit = {},
 ) {
   val cs = MaterialTheme.colorScheme
   val active = state.families.firstOrNull { it.familyId == state.activeFamilyId }
@@ -118,6 +119,16 @@ fun AccountScreen(
             Text("${state.pendingApprovals.size}", style = MaterialTheme.typography.labelLarge, color = cs.onPrimary)
           }
         }
+        Text("›", style = MaterialTheme.typography.titleLarge, color = cs.onSurfaceVariant)
+      }
+
+      Spacer(Modifier.height(11.dp))
+      Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer)
+          .clickable(onClick = onOpenDevices).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        Text("Connected devices", style = MaterialTheme.typography.titleMedium, color = cs.onSurface, modifier = Modifier.weight(1f))
         Text("›", style = MaterialTheme.typography.titleLarge, color = cs.onSurfaceVariant)
       }
 

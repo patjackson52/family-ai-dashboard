@@ -26,6 +26,9 @@ import com.familyai.client.Route
 import com.familyai.client.Session
 import com.familyai.client.SignInSucceeded
 import com.familyai.client.SignedOut
+import com.familyai.client.DeviceCredential
+import com.familyai.client.DeviceRevoked
+import com.familyai.client.DevicesLoaded
 import com.familyai.client.createAppStore
 import com.familyai.client.theme.DayfoldTheme
 import org.junit.Rule
@@ -135,5 +138,33 @@ class AuthFlowE2ETest {
     rule.onAllNodesWithText("Sam Rivera").assertCountEquals(0)  // approved → dropped
     rule.onNodeWithTag("remove-u2").performClick()
     rule.onAllNodesWithText("Maya Jackson").assertCountEquals(0) // removed → dropped
+  }
+
+  @Test fun account_revokesConnectedDevice() {
+    val store = createAppStore(AppState(route = Route.SignIn), debug = false)
+    rule.setContent {
+      DayfoldTheme {
+        FeedApp(
+          store,
+          onSignIn = {
+            store.dispatch(SignInSucceeded(Session("a", "r")))
+            store.dispatch(MembershipsLoaded(listOf(FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active"))))
+          },
+          onLoadDevices = {
+            store.dispatch(DevicesLoaded(listOf(
+              DeviceCredential("c1", kind = "app", label = "iPhone", current = true),
+              DeviceCredential("c2", kind = "cli", label = "claude-code"),
+            )))
+          },
+          onRevokeDevice = { id -> store.dispatch(DeviceRevoked(id)) },
+        )
+      }
+    }
+    rule.onNodeWithText("Continue with Google").performClick()
+    rule.onNodeWithText("Y").performClick()
+    rule.onNodeWithText("Connected devices").assertIsDisplayed().performClick()
+    rule.onNodeWithText("claude-code").assertIsDisplayed()
+    rule.onNodeWithTag("revoke-c2").performClick()
+    rule.onAllNodesWithText("claude-code").assertCountEquals(0)   // revoked → dropped
   }
 }

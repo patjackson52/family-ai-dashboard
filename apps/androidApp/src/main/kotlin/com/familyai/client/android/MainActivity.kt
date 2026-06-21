@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
           onDeclineMember = { uid -> lifecycleScope.launch { store.state.activeFamilyId?.let { authEngine.declineMember(it, uid) } } },
           onLoadMembers = { lifecycleScope.launch { store.state.activeFamilyId?.let { authEngine.loadMembers(it) } } },
           onRemoveMember = { uid -> lifecycleScope.launch { store.state.activeFamilyId?.let { authEngine.removeMember(it, uid) } } },
+          onLoadDevices = { lifecycleScope.launch { authEngine.loadDevices() } },
+          onRevokeDevice = { id -> lifecycleScope.launch { authEngine.revokeDevice(id) } },
         )
       }
     }

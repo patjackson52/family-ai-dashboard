@@ -51,6 +51,8 @@ fun main() = application {
       onDeclineMember = { uid -> scope.launch { store.state.activeFamilyId?.let { authEngine.declineMember(it, uid) } } },
       onLoadMembers = { scope.launch { store.state.activeFamilyId?.let { authEngine.loadMembers(it) } } },
       onRemoveMember = { uid -> scope.launch { store.state.activeFamilyId?.let { authEngine.removeMember(it, uid) } } },
+      onLoadDevices = { scope.launch { authEngine.loadDevices() } },
+      onRevokeDevice = { id -> scope.launch { authEngine.revokeDevice(id) } },
     )
   }
 }

@@ -53,6 +53,8 @@ fun FeedApp(
   onDeclineMember: (String) -> Unit = {},
   onLoadMembers: () -> Unit = {},
   onRemoveMember: (String) -> Unit = {},
+  onLoadDevices: () -> Unit = {},
+  onRevokeDevice: (String) -> Unit = {},
 ) {
   val state by store.selectorState { it }
   // One stable handler (remembered so feed/detail stay skippable): OpenDetail is
@@ -74,6 +76,10 @@ fun FeedApp(
       Route.Account -> AccountScreen(
         state, onSignOut = onSignOut, onClose = { store.dispatch(CloseAccount) },
         onOpenMembers = { store.dispatch(OpenMembers) },
+        onOpenDevices = { store.dispatch(OpenDevices) },
+      )
+      Route.Devices -> DevicesScreen(
+        state, onLoad = onLoadDevices, onRevoke = onRevokeDevice, onBack = { store.dispatch(OpenAccount) },
       )
       Route.Members -> MembersScreen(
         state, onApprove = onApproveMember, onDecline = onDeclineMember,

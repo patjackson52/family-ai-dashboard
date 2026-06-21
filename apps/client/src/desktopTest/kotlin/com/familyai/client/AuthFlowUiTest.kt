@@ -141,4 +141,37 @@ class AuthFlowUiTest {
     onNodeWithTag("remove-u2").performClick()
     waitUntil(timeoutMillis = 5_000L) { onAllNodesWithText("Maya Jackson").fetchSemanticsNodes().isEmpty() }
   }
+
+  @Test fun account_revokesConnectedDevice() = runComposeUiTest {
+    val store = createAppStore(AppState(route = Route.SignIn), debug = false)
+    setContent {
+      DayfoldTheme {
+        FeedApp(
+          store,
+          onSignIn = {
+            store.dispatch(SignInSucceeded(Session("a", "r")))
+            store.dispatch(MembershipsLoaded(listOf(FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active"))))
+          },
+          onLoadDevices = {
+            store.dispatch(DevicesLoaded(listOf(
+              DeviceCredential("c1", kind = "app", label = "iPhone", current = true),
+              DeviceCredential("c2", kind = "cli", label = "claude-code"),
+            )))
+          },
+          onRevokeDevice = { id -> store.dispatch(DeviceRevoked(id)) },
+        )
+      }
+    }
+    fun seen(t: String) = onAllNodesWithText(t).fetchSemanticsNodes().isNotEmpty()
+
+    onNodeWithText("Continue with Google").performClick()
+    waitUntil(timeoutMillis = 5_000L) { seen("Today") }
+    onNodeWithText("Y").performClick()
+    waitUntil(timeoutMillis = 5_000L) { seen("Connected devices") }
+    onNodeWithText("Connected devices").performClick()
+    // list loads; the CLI grant is revocable, the current device is not
+    waitUntil(timeoutMillis = 5_000L) { seen("claude-code") }
+    onNodeWithTag("revoke-c2").performClick()
+    waitUntil(timeoutMillis = 5_000L) { onAllNodesWithText("claude-code").fetchSemanticsNodes().isEmpty() }
+  }
 }

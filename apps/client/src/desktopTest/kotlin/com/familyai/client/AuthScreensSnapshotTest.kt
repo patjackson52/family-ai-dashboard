@@ -66,4 +66,11 @@ class AuthScreensSnapshotTest {
       ),
     ))
   }
+
+  @Test fun devices() = snap("auth-devices") {
+    DevicesScreen(AppState(devices = listOf(
+      DeviceCredential("c1", kind = "app", label = "iPhone 15 Pro", current = true),
+      DeviceCredential("c2", kind = "cli", label = "claude-code · CI", lastUsedAt = "2026-06-19T09:00:00Z", lastUsedIp = "San Jose"),
+    )))
+  }
 }
