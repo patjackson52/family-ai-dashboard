@@ -13,6 +13,10 @@ dependencies {
 
 kotlin { jvmToolchain(17) }
 
+// CL-3: consume the generated schema types (com.familyai.schema.*) — the single
+// source of truth — for local typed-card validation. No hand-dup, no drift.
+sourceSets["main"].kotlin.srcDir("../../packages/schema/kotlin-gen")
+
 application { mainClass.set("com.familyai.cli.MainKt") }
 
 tasks.test { useJUnitPlatform() }

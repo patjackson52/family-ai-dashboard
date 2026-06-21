@@ -1,0 +1,19 @@
+{
+  "id": "REPLACE_WITH_CARD_ID",
+  "kind": "action",
+  "title": "Jake's Rentals delivers at 1pm",
+  "provenance": { "source": "email", "at": "2026-06-20T10:00:00Z" },
+  "type": "contact",
+  "payload": {
+    "contact": {
+      "name": "Jake's Rentals",
+      "company": "Jake's Rentals",
+      "role": "Party equipment",
+      "phone": "+15555550142",
+      "email": "hello@jakesrentals.example",
+      "address": "14 Mill St, Riverside",
+      "deliveryWindow": "Today 1:00-1:30 PM",
+      "linkedEventId": "REPLACE_OR_REMOVE"
+    }
+  }
+}

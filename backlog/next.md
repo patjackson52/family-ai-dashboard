@@ -58,7 +58,24 @@ blocked** behind a queued Claude-Design expanded-detail pass.
   codegen `z.discriminatedUnion`; (c) `$ref`→`z.any` for id/version/provenance.
   **Integrated into `cl-next`** (ff-merge `8f11301`, local; not pushed). **NEXT =
   CL-4** (client data: typed model + SQLDelight + store).
-- **TASK-CL-3** — CLI + Claude-skill typed authoring (the content-API wedge).
+- **TASK-CL-3** — CLI typed authoring (content-API wedge). ✅ **DONE**
+  (branch `cl-3-cli-typed-authoring` → integrated into `cl-next`) 2026-06-20.
+  **Operator-authorized** (was INB-18-deferred). CLI now consumes the generated
+  `com.familyai.schema.*` types (srcDir `kotlin-gen` — one source of truth).
+  `familyai push <id> <file> --type <t>` runs **local structural validation**
+  (`validateCard`: strict decode + type↔payload-key cross-check + `--type` assert)
+  and fails fast with field errors before the server; `familyai template <type>`
+  emits a valid starter (6 templates in `src/main/resources/templates/`).
+  Authoring doc `apps/cli/templates/README.md` (incl. Guardrail-3 own-mail
+  constraint + geo `on_device` privacy honesty). **Validator is STRUCTURAL only**
+  — the server (CL-2) stays the authority for `url()`/ISO-datetime/length/int
+  rules; two codegen asymmetries (`kind`/`provenance.at` required locally)
+  documented. **CLI test green** (ValidateTest 8/0, CredentialsTest 2/0; build +
+  `template` smoke verified). Reviewed (final: doc-honesty fix on the
+  "mirrors server" claim → softened). Spec:
+  `docs/superpowers/specs/2026-06-20-cl-3-cli-typed-authoring-design.md`.
+  **Follow:** the deeper-validation (codegen-emitted refinements) + a Claude skill
+  wrapper are later; M0 authoring works now.
 - **TASK-CL-4** — Client data: typed model + SQLDelight + store. ✅ **DONE**
   (branch `cl-4-client-typed-data` → integrated into `cl-next`) 2026-06-20.
   `Card` gains `type`/`payload`/`privacy`/`hubRef`; new wrapper `Payload` + 6

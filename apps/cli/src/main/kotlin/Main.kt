@@ -90,6 +90,16 @@ fun main(args: Array<String>) {
       val id = args.getOrNull(1) ?: usage()
       val file = args.getOrNull(2) ?: usage()
       val payload = Files.readString(Path.of(file))
+      // CL-3: opt-in local typed validation (`--type <t>`) — fail fast with field
+      // errors before the server, against the generated schema types. Server stays
+      // the authority. Flags come AFTER the positional <cardId> <file>.
+      flagValue(args, "--type")?.let { t ->
+        val errs = validateCard(t, withId(payload, id))
+        if (errs.isNotEmpty()) {
+          System.err.println("validation failed:\n  " + errs.joinToString("\n  "))
+          exitProcess(1)
+        }
+      }
       val store = Credentials()
       val creds = store.load()
       if (creds != null) {
@@ -119,8 +129,27 @@ fun main(args: Array<String>) {
       }
     }
 
+    // familyai template <type>  — print a valid starter card for the type.
+    "template" -> {
+      val t = args.getOrNull(1) ?: usage()
+      if (t !in CONTENT_TYPES) {
+        System.err.println("unknown type: $t (one of: ${CONTENT_TYPES.joinToString()})"); exitProcess(2)
+      }
+      val tpl = {}.javaClass.getResourceAsStream("/templates/$t.json")
+        ?: run { System.err.println("template missing for $t"); exitProcess(1) }
+      print(tpl.readBytes().decodeToString())
+    }
+
     else -> usage()
   }
+}
+
+private val CONTENT_TYPES = listOf("file", "link", "invite", "contact", "geo", "email")
+
+/** Value following a `--flag` token (position-agnostic), or null. */
+private fun flagValue(args: Array<String>, flag: String): String? {
+  val i = args.indexOf(flag)
+  return if (i >= 0 && i + 1 < args.size) args[i + 1] else null
 }
 
 private fun deviceLogin(api: String) {
@@ -159,6 +188,12 @@ private fun deviceLogin(api: String) {
 }
 
 private fun usage(): Nothing {
-  System.err.println("usage: familyai <login | logout | whoami | push <cardId> <file.json>>")
+  System.err.println(
+    "usage: familyai <command>\n" +
+      "  login | logout | whoami\n" +
+      "  push <cardId> <file.json> [--type file|link|invite|contact|geo|email]\n" +
+      "        (--type runs local typed validation before the server)\n" +
+      "  template <type>            print a valid starter card for the type",
+  )
   exitProcess(2)
 }

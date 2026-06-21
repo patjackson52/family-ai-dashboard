@@ -1,0 +1,21 @@
+{
+  "id": "REPLACE_WITH_CARD_ID",
+  "kind": "info",
+  "title": "Riverside Park — 8 min away",
+  "provenance": { "source": "user", "at": "2026-06-20T10:00:00Z" },
+  "type": "geo",
+  "privacy": { "storage": "on_device" },
+  "payload": {
+    "geo": {
+      "label": "Riverside Park — Shelter B",
+      "address": "200 Riverside Dr, Riverside",
+      "lat": 37.42,
+      "lng": -122.08,
+      "etaMin": 8,
+      "distance": "2.4 mi",
+      "travelMode": "driving",
+      "parking": "Lot C · free",
+      "leaveBy": "2026-06-21T14:40:00Z"
+    }
+  }
+}

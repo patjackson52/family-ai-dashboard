@@ -1,0 +1,19 @@
+{
+  "id": "REPLACE_WITH_CARD_ID",
+  "kind": "action",
+  "title": "Permission slip — sign by Thursday",
+  "provenance": { "source": "claude", "at": "2026-06-20T10:00:00Z" },
+  "type": "file",
+  "privacy": { "storage": "on_device" },
+  "payload": {
+    "file": {
+      "filename": "permission.pdf",
+      "mime": "application/pdf",
+      "size": 240000,
+      "pages": 2,
+      "source": "email",
+      "modified": "2026-06-18T09:00:00Z",
+      "docRef": "https://drive.example/permission.pdf"
+    }
+  }
+}

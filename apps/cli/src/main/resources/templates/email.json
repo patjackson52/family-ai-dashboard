@@ -1,0 +1,19 @@
+{
+  "id": "REPLACE_WITH_CARD_ID",
+  "kind": "action",
+  "title": "School RSVP needs a reply by Thursday",
+  "provenance": { "source": "email", "at": "2026-06-20T10:00:00Z" },
+  "type": "email",
+  "payload": {
+    "email": {
+      "from": "Lincoln Elementary",
+      "fromAddr": "office@lincoln.example",
+      "subject": "Field trip permission",
+      "date": "2026-06-18T08:00:00Z",
+      "threadLen": 2,
+      "bodyExcerpt": "Please reply yes/no for Maya's field trip by Thursday.",
+      "attachments": [{ "name": "permission.pdf", "mime": "application/pdf", "size": 240000 }],
+      "labels": ["school"]
+    }
+  }
+}
