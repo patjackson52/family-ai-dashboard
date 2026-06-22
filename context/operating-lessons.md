@@ -105,6 +105,23 @@ planning loop). Read at bootstrap; consult when tempted to skip process.
 23. **Time-sensitive items live pinned at the top of `backlog/now.md`**
     with hard dates.
 24. **Resolve naming early** — renames get costlier with every artifact.
+25. **`node`'s strip-only TS loader forbids runtime-emitting TS** in any file the
+    dev server imports — constructor *parameter properties*, enums, namespaces,
+    decorators. vitest/esbuild and the Vercel bundle accept them, so unit tests +
+    the prod bundle stay green; the failure shows up only at `node src/server.ts`
+    runtime. Cost: an `/auth/firebase` 500 during live device testing. Declare
+    fields explicitly and assign in the constructor body.
+26. **A spinner/`Loading` route must never be terminal.** Any async-gated UI state
+    (cold-start restore, auth) must transition on *every* outcome — success, dead
+    session, transient error — or it wedges with no escape. Pair it with an
+    error/recovery route (Retry + Sign out) and route there on failure. Cost: an
+    infinite-spinner repro after a refresh token was revoked.
+27. **In a Compose-Multiplatform app, the Android shell must run the exact
+    Compose-MP version `:client` compiled against.** One transitive (a debug-only
+    devtools dep) floating Compose up via Gradle "highest wins" → runtime
+    `NoSuchMethodError` (a changed `sharedBounds` signature) that compile + snapshot
+    tests miss (they no-op the shared-transition scopes). Align the whole matrix;
+    don't let a single dep drift the UI runtime.
 
 ## The ordering insight
 
