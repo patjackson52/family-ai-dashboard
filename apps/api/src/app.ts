@@ -60,6 +60,35 @@ app.post("/auth/dev-token", async (c) => {
   return c.json({ access, refresh });
 });
 
+// S2 (ADR 0023/0027): real sign-in. Verify a Firebase ID token (Google/Apple),
+// then mint OUR EdDSA access + rotating refresh — identical right-half to dev-token.
+// Always on (prod included); identity proof is the Firebase signature, not a dev gate.
+app.post("/auth/firebase", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const idToken = body?.idToken;
+  if (!idToken || typeof idToken !== "string") return c.json({ type: "missing-id-token" }, 400);
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  if (!projectId) return c.json({ type: "auth-unconfigured" }, 503);
+  const { FirebaseVerifier, findOrCreateUser, mintCredentialFor } = await import("./auth/identity.ts");
+  // Emulator mode skips signature verification — NEVER honor it in prod/preview,
+  // even if the host env var leaks in (defense in depth; mirrors the dev-token gate).
+  const env = process.env.VERCEL_ENV;
+  const emulator = !!process.env.FIREBASE_AUTH_EMULATOR_HOST && env !== "production" && env !== "preview";
+  const verifier = new FirebaseVerifier({ projectId, emulator });
+  const idn = await verifier.verify(idToken).catch((e) => {
+    console.warn(`[auth/firebase] verify failed: ${e?.message}`);
+    return null;
+  });
+  if (!idn) return c.json({ type: "bad-identity" }, 401);
+  const { userId } = await findOrCreateUser(idn);
+  const { credentialId } = await mintCredentialFor(userId);
+  const { mintAccess } = await import("./auth/tokens.ts");
+  const { issueRefresh } = await import("./auth/refresh.ts");
+  const access = await mintAccess({ sub: userId, cid: credentialId });
+  const refresh = await issueRefresh(credentialId);
+  return c.json({ access, refresh });
+});
+
 app.post("/auth/refresh", async (c) => {
   const body = await c.req.json().catch(() => null);
   const { rotate, hashToken } = await import("./auth/refresh.ts");

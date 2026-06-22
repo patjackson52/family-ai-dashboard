@@ -84,12 +84,14 @@ var init_tokens = __esm({
 // src/auth/identity.ts
 var identity_exports = {};
 __export(identity_exports, {
+  FirebaseVerifier: () => FirebaseVerifier,
   StubVerifier: () => StubVerifier,
   createFamily: () => createFamily,
   findOrCreateUser: () => findOrCreateUser,
   mintCredentialFor: () => mintCredentialFor
 });
 import { randomBytes } from "node:crypto";
+import { jwtVerify as jwtVerify2, decodeJwt, createRemoteJWKSet } from "jose";
 async function findOrCreateUser(idn) {
   const existing = await q(
     `SELECT user_id FROM user_identities WHERE provider=$1 AND provider_uid=$2`,
@@ -142,7 +144,7 @@ async function mintCredentialFor(userId) {
   );
   return { credentialId };
 }
-var StubVerifier, id;
+var StubVerifier, FIREBASE_JWKS_URL, FirebaseVerifier, id;
 var init_identity = __esm({
   "src/auth/identity.ts"() {
     "use strict";
@@ -152,6 +154,40 @@ var init_identity = __esm({
         const o = a;
         if (!o?.provider || !o?.provider_uid) throw new Error("bad stub identity");
         return { provider: o.provider, provider_uid: o.provider_uid, email_verified: !!o.email_verified };
+      }
+    };
+    FIREBASE_JWKS_URL = process.env.FIREBASE_JWKS_URI || "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+    FirebaseVerifier = class {
+      constructor(opts) {
+        this.opts = opts;
+        this.jwks = opts.jwks ?? createRemoteJWKSet(new URL(FIREBASE_JWKS_URL));
+      }
+      jwks;
+      async verify(assertion) {
+        const idToken = typeof assertion === "string" ? assertion : assertion?.idToken;
+        if (!idToken) throw new Error("missing idToken");
+        const iss = `https://securetoken.google.com/${this.opts.projectId}`;
+        let payload;
+        if (this.opts.emulator) {
+          payload = decodeJwt(idToken);
+          if (payload.iss !== iss) throw new Error("bad iss");
+          if (payload.aud !== this.opts.projectId) throw new Error("bad aud");
+          const exp = Number(payload.exp);
+          if (!exp || exp * 1e3 < Date.now()) throw new Error("expired");
+          if (!payload.sub) throw new Error("missing sub");
+        } else {
+          ({ payload } = await jwtVerify2(idToken, this.jwks, {
+            algorithms: ["RS256"],
+            issuer: iss,
+            audience: this.opts.projectId
+          }));
+        }
+        const fb = payload.firebase ?? {};
+        const provider = fb.sign_in_provider;
+        if (!provider || provider === "anonymous") throw new Error("unsupported provider");
+        const ids = fb.identities?.[provider];
+        const providerUid = Array.isArray(ids) && ids[0] ? String(ids[0]) : String(payload.sub);
+        return { provider, provider_uid: providerUid, email_verified: !!payload.email_verified };
       }
     };
     id = (p) => p + "_" + randomBytes(9).toString("hex");
@@ -853,6 +889,29 @@ app.post("/auth/dev-token", async (c) => {
     `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write}')`,
     [credentialId, userId]
   );
+  const { mintAccess: mintAccess2 } = await Promise.resolve().then(() => (init_tokens(), tokens_exports));
+  const { issueRefresh: issueRefresh2 } = await Promise.resolve().then(() => (init_refresh(), refresh_exports));
+  const access = await mintAccess2({ sub: userId, cid: credentialId });
+  const refresh = await issueRefresh2(credentialId);
+  return c.json({ access, refresh });
+});
+app.post("/auth/firebase", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const idToken = body?.idToken;
+  if (!idToken || typeof idToken !== "string") return c.json({ type: "missing-id-token" }, 400);
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  if (!projectId) return c.json({ type: "auth-unconfigured" }, 503);
+  const { FirebaseVerifier: FirebaseVerifier2, findOrCreateUser: findOrCreateUser2, mintCredentialFor: mintCredentialFor2 } = await Promise.resolve().then(() => (init_identity(), identity_exports));
+  const env = process.env.VERCEL_ENV;
+  const emulator = !!process.env.FIREBASE_AUTH_EMULATOR_HOST && env !== "production" && env !== "preview";
+  const verifier = new FirebaseVerifier2({ projectId, emulator });
+  const idn = await verifier.verify(idToken).catch((e) => {
+    console.warn(`[auth/firebase] verify failed: ${e?.message}`);
+    return null;
+  });
+  if (!idn) return c.json({ type: "bad-identity" }, 401);
+  const { userId } = await findOrCreateUser2(idn);
+  const { credentialId } = await mintCredentialFor2(userId);
   const { mintAccess: mintAccess2 } = await Promise.resolve().then(() => (init_tokens(), tokens_exports));
   const { issueRefresh: issueRefresh2 } = await Promise.resolve().then(() => (init_refresh(), refresh_exports));
   const access = await mintAccess2({ sub: userId, cid: credentialId });

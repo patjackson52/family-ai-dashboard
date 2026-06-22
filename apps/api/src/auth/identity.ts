@@ -1,6 +1,9 @@
-// Pluggable identity boundary + user/family/credential creation. Firebase verifier
-// arrives at S2; S1 uses StubVerifier (tests) + DevVerifier (gated dev-token).
+// Pluggable identity boundary + user/family/credential creation. S1 uses
+// StubVerifier (tests) + DevVerifier (gated dev-token). S2 (ADR 0023/0027):
+// FirebaseVerifier verifies a Firebase ID token by direct JWKS check (no Admin
+// SDK / no service-account secret), then findOrCreateUser mints OUR tokens.
 import { randomBytes } from "node:crypto";
+import { jwtVerify, decodeJwt, createRemoteJWKSet, type JWTVerifyGetKey } from "jose";
 import { pool, q } from "../db.ts";
 
 export interface Identity { provider: string; provider_uid: string; email_verified?: boolean }
@@ -12,6 +15,67 @@ export class StubVerifier implements IdentityVerifier {
     const o = a as Identity;
     if (!o?.provider || !o?.provider_uid) throw new Error("bad stub identity");
     return { provider: o.provider, provider_uid: o.provider_uid, email_verified: !!o.email_verified };
+  }
+}
+
+// Firebase ID-token verifier (ADR 0027: direct JWKS, not Admin SDK).
+//
+// A Firebase ID token is an RS256 JWT signed by Google's securetoken service.
+// We verify signature against Google's published keys, then bind identity to the
+// UNDERLYING provider uid (ADR 0011: never rely on Firebase auto-link; key on
+// provider + provider_uid — Google account id / Apple `sub`, not the Firebase uid).
+//
+// Emulator mode: the Firebase Auth Emulator issues UNSIGNED tokens (alg "none").
+// When FIREBASE_AUTH_EMULATOR_HOST is set we decode-and-validate claims without a
+// signature check — mirroring the Admin SDK's own emulator behaviour — so CI can
+// exercise this exact code path with emulator-minted tokens (ADR 0027 test topology).
+export interface FirebaseVerifierOpts {
+  projectId: string;
+  jwks?: JWTVerifyGetKey;   // DI for tests; default = Google's remote JWKS
+  emulator?: boolean;       // skip signature (emulator tokens are unsigned)
+}
+
+const FIREBASE_JWKS_URL =
+  process.env.FIREBASE_JWKS_URI ||
+  "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+
+export class FirebaseVerifier implements IdentityVerifier {
+  private jwks: JWTVerifyGetKey;
+  constructor(private opts: FirebaseVerifierOpts) {
+    this.jwks = opts.jwks ?? createRemoteJWKSet(new URL(FIREBASE_JWKS_URL));
+  }
+  async verify(assertion: unknown): Promise<Identity> {
+    const idToken =
+      typeof assertion === "string" ? assertion : (assertion as { idToken?: string })?.idToken;
+    if (!idToken) throw new Error("missing idToken");
+    const iss = `https://securetoken.google.com/${this.opts.projectId}`;
+
+    let payload: Record<string, unknown>;
+    if (this.opts.emulator) {
+      payload = decodeJwt(idToken) as Record<string, unknown>;
+      if (payload.iss !== iss) throw new Error("bad iss");
+      if (payload.aud !== this.opts.projectId) throw new Error("bad aud");
+      const exp = Number(payload.exp);
+      if (!exp || exp * 1000 < Date.now()) throw new Error("expired");
+      if (!payload.sub) throw new Error("missing sub");
+    } else {
+      ({ payload } = (await jwtVerify(idToken, this.jwks, {
+        algorithms: ["RS256"],
+        issuer: iss,
+        audience: this.opts.projectId,
+      })) as unknown as { payload: Record<string, unknown> });
+    }
+
+    // Bind to the underlying provider identity, not the Firebase uid.
+    const fb = (payload.firebase ?? {}) as {
+      sign_in_provider?: string;
+      identities?: Record<string, string[]>;
+    };
+    const provider = fb.sign_in_provider;
+    if (!provider || provider === "anonymous") throw new Error("unsupported provider");
+    const ids = fb.identities?.[provider];
+    const providerUid = Array.isArray(ids) && ids[0] ? String(ids[0]) : String(payload.sub);
+    return { provider, provider_uid: providerUid, email_verified: !!payload.email_verified };
   }
 }
 
