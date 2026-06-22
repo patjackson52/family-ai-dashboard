@@ -158,11 +158,15 @@ var init_identity = __esm({
     };
     FIREBASE_JWKS_URL = process.env.FIREBASE_JWKS_URI || "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
     FirebaseVerifier = class {
+      jwks;
+      opts;
+      // NB: no constructor parameter properties — Node's strip-only TS loader
+      // (`node src/server.ts`) rejects them (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX),
+      // even though esbuild (vitest + the Vercel bundle) accepts them.
       constructor(opts) {
         this.opts = opts;
         this.jwks = opts.jwks ?? createRemoteJWKSet(new URL(FIREBASE_JWKS_URL));
       }
-      jwks;
       async verify(assertion) {
         const idToken = typeof assertion === "string" ? assertion : assertion?.idToken;
         if (!idToken) throw new Error("missing idToken");

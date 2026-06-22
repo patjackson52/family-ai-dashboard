@@ -41,7 +41,12 @@ const FIREBASE_JWKS_URL =
 
 export class FirebaseVerifier implements IdentityVerifier {
   private jwks: JWTVerifyGetKey;
-  constructor(private opts: FirebaseVerifierOpts) {
+  private opts: FirebaseVerifierOpts;
+  // NB: no constructor parameter properties — Node's strip-only TS loader
+  // (`node src/server.ts`) rejects them (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX),
+  // even though esbuild (vitest + the Vercel bundle) accepts them.
+  constructor(opts: FirebaseVerifierOpts) {
+    this.opts = opts;
     this.jwks = opts.jwks ?? createRemoteJWKSet(new URL(FIREBASE_JWKS_URL));
   }
   async verify(assertion: unknown): Promise<Identity> {
