@@ -87,21 +87,28 @@ describe.skipIf(!HOST)("POST /auth/firebase — real Firebase Auth Emulator", ()
     expect(u.rows[0].n).toBe(1);
   });
 
-  it("rejects a token minted for a different project (aud mismatch)", async () => {
-    // Point the emulator REST at a different project id → its token's aud won't match ours.
-    const url = `http://${HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=fake`;
-    const claim = JSON.stringify({ sub: "g-wrongproj", email: "x@y.z", email_verified: true });
-    const r = await fetch(url.replace(PROJECT, "some-other-project"), {
+  it("rejects a wrong-aud token through the real route (emulator-decode path)", async () => {
+    // The single-project emulator always mints tokens for `--project dayfold-test`,
+    // so we can't make IT issue a wrong-aud token. But emulator mode decodes UNSIGNED
+    // tokens (alg "none") without a signature check — so hand-craft one with a wrong
+    // `aud` and POST it to the live route to exercise FirebaseVerifier's aud guard
+    // (identity.ts) end-to-end. (Hermetic aud rejection lives in auth-firebase.test.ts;
+    // this asserts the same guard holds across the actual /auth/firebase handler.)
+    const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    const unsigned = (claims: Record<string, unknown>) =>
+      `${b64({ alg: "none", typ: "JWT" })}.${b64(claims)}.`;
+    const wrongAud = unsigned({
+      iss: `https://securetoken.google.com/${PROJECT}`,
+      aud: "some-other-project",
+      sub: "g-wrongproj",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      email_verified: true,
+      firebase: { sign_in_provider: "google.com", identities: { "google.com": ["g-wrongproj"] } },
+    });
+    const resp = await app.request("/auth/firebase", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ postBody: `id_token=${encodeURIComponent(claim)}&providerId=google.com`, requestUri: "http://localhost", returnSecureToken: true }),
-    }).catch(() => null);
-    // If the emulator issues a token at all, our endpoint must reject a wrong-aud token.
-    if (r && r.ok) {
-      const tok = ((await r.json()) as { idToken?: string }).idToken;
-      if (tok) {
-        const resp = await app.request("/auth/firebase", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken: tok }) });
-        expect(resp.status).toBe(401);
-      }
-    }
+      body: JSON.stringify({ idToken: wrongAud }),
+    });
+    expect(resp.status).toBe(401);
   });
 });
