@@ -246,9 +246,14 @@ blocked** behind a queued Claude-Design expanded-detail pass.
 
 ## AUTH (ADR 0021 — S1→S3→S2→S4→S5/S6)
 
-### TASK-AUTH-S6-D — CLI device-approval UI + scan/deep-link (in planning)
-**Status:** spec + plan written, under review 2026-06-23 (branch
-`claude/cli-login-flow-review-aq9lp0`). Closes the **CLI login loop** — S3 shipped
+### TASK-AUTH-S6-D — CLI device-approval UI + scan/deep-link (building)
+**Status:** Phase-1 backend + CLI QR ✅ built/tested/pushed 2026-06-23 (branch
+`claude/cli-login-flow-review-aq9lp0`): step 1 `GET /device/pending` + datacenter
+classifier (`1ff5f5e`), step 1b central `requireScope` read-gate (api 153 green),
+step 7 CLI login QR (`76c42c8`, 13 CLI tests). **Steps 2–6 (Compose approval UI),
+7b (keychain), 8 (E2E) deferred to a full-mobile-toolchain session** (no Android
+SDK in the remote env). **NEXT = client AuthClient→reducer→AuthEngine→screens
+against the shipped `/device/pending` + reused approve/deny.** ADR 0029 Accepted. Closes the **CLI login loop** — S3 shipped
 the API grant + a text CLI, but the **mobile approval UI never existed**
 (`DevicesScreen` only lists/revokes). Spec:
 `docs/superpowers/specs/2026-06-23-auth-s6d-device-approval-design.md`;
