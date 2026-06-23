@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -291,7 +292,7 @@ fun CreateFamilyScreen(
 
 // ── Family null state (Feed substate: a family with nothing in it yet) ──
 @Composable
-fun FamilyNullState(modifier: Modifier = Modifier) {
+fun FamilyNullState(modifier: Modifier = Modifier, onConnectDevice: () -> Unit = {}) {
   val cs = MaterialTheme.colorScheme
   Column(
     modifier.fillMaxSize().background(cs.surface).padding(horizontal = 26.dp),
@@ -308,15 +309,20 @@ fun FamilyNullState(modifier: Modifier = Modifier) {
     Spacer(Modifier.height(26.dp))
     NullCta(title = "Invite a member", subtitle = "Share a QR or link — you approve each one", container = cs.primaryContainer, onContainer = cs.onPrimaryContainer)
     Spacer(Modifier.height(11.dp))
-    NullCta(title = "Connect a device or CLI", subtitle = "Let Claude Code or a script add cards", container = cs.tertiaryContainer, onContainer = cs.onTertiaryContainer)
+    NullCta(
+      title = "Connect a device or CLI", subtitle = "Let Claude Code or a script add cards",
+      container = cs.tertiaryContainer, onContainer = cs.onTertiaryContainer, onClick = onConnectDevice,
+    )
   }
 }
 
 @Composable
-private fun NullCta(title: String, subtitle: String, container: Color, onContainer: Color) {
+private fun NullCta(title: String, subtitle: String, container: Color, onContainer: Color, onClick: (() -> Unit)? = null) {
   val cs = MaterialTheme.colorScheme
   Row(
-    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cs.surfaceContainer).padding(16.dp),
+    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cs.surfaceContainer)
+      .then(if (onClick != null) Modifier.clickable(onClick = onClick).testTag("null-cta-connect") else Modifier)
+      .padding(16.dp),
     verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(14.dp),
   ) {

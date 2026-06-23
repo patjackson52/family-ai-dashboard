@@ -9,6 +9,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -286,5 +287,157 @@ class AuthEngineTest {
     val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.NoContent) }))
     AuthEngine(store, client, MemTokenStore(Session("a", "r"))).revokeDevice("c2")
     assertEquals(listOf("c1"), store.state.devices.map { it.id })
+  }
+
+  // ── CLI/device approval (S6-D) ── runBlocking<Unit> per the agent-dev-loop JUnit gotcha.
+  @Test fun `lookupDevice happy path loads the grant and routes to AuthorizeDevice`() = runBlocking<Unit> {
+    val store = createAppStore(AppState(session = Session("a", "r"), route = Route.EnterCode), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { req ->
+      if (req.url.encodedPath == "/device/pending")
+        respond("""{"user_code":"WDJF-7K2P","client":"dayfold-cli","origin_kind":"datacenter"}""", HttpStatusCode.OK, jsonCt)
+      else respond("", HttpStatusCode.NotFound)
+    }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).lookupDevice("WDJF-7K2P")
+    assertEquals(Route.AuthorizeDevice, store.state.route)
+    assertEquals("WDJF-7K2P", store.state.pendingDevice?.userCode)
+    assertEquals("datacenter", store.state.pendingDevice?.originKind)
+  }
+
+  @Test fun `lookupDevice 404 routes to AuthorizeDevice with the expired outcome`() = runBlocking<Unit> {
+    val store = createAppStore(AppState(session = Session("a", "r"), route = Route.EnterCode), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.NotFound) }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).lookupDevice("XXXX-YYYY")
+    assertEquals(Route.AuthorizeDevice, store.state.route)
+    assertEquals("expired", store.state.deviceOutcome)
+    assertNull(store.state.pendingDevice)
+  }
+
+  @Test fun `lookupDevice 429 stays on EnterCode with an inline error`() = runBlocking<Unit> {
+    val store = createAppStore(AppState(session = Session("a", "r"), route = Route.EnterCode), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.TooManyRequests) }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).lookupDevice("X")
+    assertEquals(Route.EnterCode, store.state.route)
+    assertTrue(store.state.deviceError?.contains("15 minutes") == true, "was: ${store.state.deviceError}")
+  }
+
+  @Test fun `lookupDevice 401 refreshes once and retries`() = runBlocking<Unit> {
+    val ts = MemTokenStore(Session("stale", "r1"))
+    var lookups = 0
+    val store = createAppStore(AppState(session = Session("stale", "r1"), route = Route.EnterCode), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { req ->
+      when (req.url.encodedPath) {
+        "/device/pending" -> {
+          lookups++
+          if (lookups == 1) respond("expired", HttpStatusCode.Unauthorized)
+          else respond("""{"user_code":"WDJF-7K2P","origin_kind":"residential"}""", HttpStatusCode.OK, jsonCt)
+        }
+        "/auth/refresh" -> respond("""{"access":"fresh","refresh":"r2"}""", HttpStatusCode.OK, jsonCt)
+        else -> respond("", HttpStatusCode.NotFound)
+      }
+    }))
+    AuthEngine(store, client, ts).lookupDevice("WDJF-7K2P")
+    assertEquals(2, lookups)                                      // retried after refresh
+    assertEquals(Session("fresh", "r2"), store.state.session)     // rotated into state
+    assertEquals(Session("fresh", "r2"), ts.session)             // and persisted
+    assertEquals(Route.AuthorizeDevice, store.state.route)
+    assertEquals("WDJF-7K2P", store.state.pendingDevice?.userCode)
+  }
+
+  @Test fun `approveDevice happy path sets the approved outcome`() = runBlocking<Unit> {
+    val store = createAppStore(
+      AppState(session = Session("a", "r"), route = Route.AuthorizeDevice, pendingDevice = PendingDevice("WDJF-7K2P")),
+      debug = false,
+    )
+    var path = ""
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { req -> path = req.url.encodedPath; respond("", HttpStatusCode.NoContent) }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).approveDevice("fam1", "WDJF-7K2P")
+    assertEquals("/families/fam1/device/approve", path)
+    assertEquals("approved", store.state.deviceOutcome)
+    assertFalse(store.state.deviceBusy)
+  }
+
+  @Test fun `approveDevice 404 race sets the expired outcome`() = runBlocking<Unit> {
+    val store = createAppStore(
+      AppState(session = Session("a", "r"), route = Route.AuthorizeDevice, pendingDevice = PendingDevice("X")),
+      debug = false,
+    )
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.NotFound) }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).approveDevice("fam1", "X")
+    assertEquals("expired", store.state.deviceOutcome)
+  }
+
+  @Test fun `approveDevice 403 (non-owner) surfaces an inline error, no outcome`() = runBlocking<Unit> {
+    val store = createAppStore(
+      AppState(session = Session("a", "r"), route = Route.AuthorizeDevice, pendingDevice = PendingDevice("X")),
+      debug = false,
+    )
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.Forbidden) }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).approveDevice("fam2", "X")
+    assertNull(store.state.deviceOutcome)
+    assertTrue(store.state.deviceError?.contains("owner") == true, "was: ${store.state.deviceError}")
+  }
+
+  @Test fun `denyDevice sets the denied outcome (204 or already-gone)`() = runBlocking<Unit> {
+    val mk = { status: HttpStatusCode ->
+      val store = createAppStore(
+        AppState(session = Session("a", "r"), route = Route.AuthorizeDevice, pendingDevice = PendingDevice("X")),
+        debug = false,
+      )
+      val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", status) }))
+      runBlocking { AuthEngine(store, client, MemTokenStore(Session("a", "r"))).denyDevice("fam1", "X") }
+      store
+    }
+    assertEquals("denied", mk(HttpStatusCode.NoContent).state.deviceOutcome)
+    assertEquals("denied", mk(HttpStatusCode.NotFound).state.deviceOutcome)   // gone == denied
+  }
+
+  // ── deep-link (Phase 2 client plumbing) ──
+  @Test fun `openDeviceLink while signed-in looks up immediately`() = runBlocking<Unit> {
+    val store = createAppStore(AppState(session = Session("a", "r"), route = Route.Feed), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { req ->
+      if (req.url.encodedPath == "/device/pending")
+        respond("""{"user_code":"WDJF-7K2P","origin_kind":"residential"}""", HttpStatusCode.OK, jsonCt)
+      else respond("", HttpStatusCode.NotFound)
+    }))
+    AuthEngine(store, client, MemTokenStore(Session("a", "r"))).openDeviceLink("https://x/device?user_code=WDJF-7K2P")
+    assertEquals(Route.AuthorizeDevice, store.state.route)
+    assertEquals("WDJF-7K2P", store.state.pendingDevice?.userCode)
+    assertNull(store.state.pendingDeviceLink)            // not stashed — handled live
+  }
+
+  @Test fun `openDeviceLink while signed-out stashes the code without navigating`() = runBlocking<Unit> {
+    val store = createAppStore(AppState(route = Route.SignIn), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.NotFound) }))
+    AuthEngine(store, client, MemTokenStore(null), devSecret = "DEVSECRET").openDeviceLink("https://x/device?user_code=WDJF-7K2P")
+    assertEquals(Route.SignIn, store.state.route)
+    assertEquals("WDJF-7K2P", store.state.pendingDeviceLink)
+  }
+
+  @Test fun `openDeviceLink ignores a malformed payload`() = runBlocking<Unit> {
+    val store = createAppStore(AppState(route = Route.SignIn), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { respond("", HttpStatusCode.NotFound) }))
+    AuthEngine(store, client, MemTokenStore(null)).openDeviceLink("https://x/device")  // no user_code
+    assertNull(store.state.pendingDeviceLink)
+    assertEquals(Route.SignIn, store.state.route)
+  }
+
+  @Test fun `cold-install resume — stashed link opens after sign-in resolves memberships`() = runBlocking<Unit> {
+    val ts = MemTokenStore(null)
+    val store = createAppStore(AppState(route = Route.SignIn), debug = false)
+    val client = AuthClient("https://api.test", HttpClient(MockEngine { req ->
+      when (req.url.encodedPath) {
+        "/auth/dev-token" -> respond("""{"access":"a1","refresh":"r1"}""", HttpStatusCode.OK, jsonCt)
+        "/auth/whoami" -> respond(whoami(activeOwner), HttpStatusCode.OK, jsonCt)
+        "/device/pending" -> respond("""{"user_code":"WDJF-7K2P","origin_kind":"datacenter"}""", HttpStatusCode.OK, jsonCt)
+        else -> respond("", HttpStatusCode.NotFound)
+      }
+    }))
+    val eng = AuthEngine(store, client, ts, devSecret = "DEVSECRET")
+    eng.openDeviceLink("https://x/device?user_code=WDJF-7K2P")   // pre-sign-in tap → stashed
+    assertEquals("WDJF-7K2P", store.state.pendingDeviceLink)
+    eng.signIn("google")                                         // sign-in → memberships → resume
+    assertNull(store.state.pendingDeviceLink)                    // consumed
+    assertEquals(Route.AuthorizeDevice, store.state.route)       // resumed straight onto approve
+    assertEquals("WDJF-7K2P", store.state.pendingDevice?.userCode)
   }
 }

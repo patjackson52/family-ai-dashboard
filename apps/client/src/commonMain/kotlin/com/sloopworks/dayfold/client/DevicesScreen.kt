@@ -34,6 +34,7 @@ fun DevicesScreen(
   onLoad: () -> Unit = {},
   onRevoke: (String) -> Unit = {},
   onBack: () -> Unit = {},
+  onConnectDevice: () -> Unit = {},
 ) {
   val cs = MaterialTheme.colorScheme
   LaunchedEffect(Unit) { onLoad() }
@@ -56,6 +57,21 @@ fun DevicesScreen(
         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
       )
       Spacer(Modifier.height(14.dp))
+      // Connect a device/CLI — opens the enter-code → approve flow (S6-D).
+      Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+          .background(cs.surfaceContainer).testTag("devices-connect").clickable(onClick = onConnectDevice).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp),
+      ) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(cs.tertiaryContainer), contentAlignment = Alignment.Center) {
+          Text("+", style = MaterialTheme.typography.titleLarge, color = cs.onTertiaryContainer)
+        }
+        Column(Modifier.weight(1f)) {
+          Text("Connect a device", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
+          Text("Enter the code shown by a CLI or another device", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        }
+      }
+      Spacer(Modifier.height(9.dp))
       Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         state.devices.forEach { d -> DeviceRow(d, onRevoke) }
       }

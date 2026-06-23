@@ -39,6 +39,28 @@ class FeedAppHostTest {
     assertTrue(store.state.detailStack == listOf("f"))
   }
 
+  // S6-D: FeedApp hosts the device-approval routes without crashing (each outcome).
+  private fun hostShot(name: String, initial: AppState) = runComposeUiTest {
+    val store = createAppStore(initial, debug = false)
+    setContent { FeedApp(store) }
+    val img = onRoot().captureToImage()
+    assertTrue(img.width > 0 && img.height > 0)
+    ImageIO.write(img.toAwtImage(), "png", File("build/snapshots".also { File(it).mkdirs() }, "$name.png"))
+  }
+
+  private val ownerFam = FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active")
+  private fun authedAt(route: Route, outcome: String? = null) = AppState(
+    session = Session("a", "r"), families = listOf(ownerFam), activeFamilyId = "fam1",
+    route = route, deviceOutcome = outcome,
+    pendingDevice = PendingDevice("WDJF-7K2P", client = "Dayfold CLI", originKind = "residential"),
+  )
+
+  @Test fun hostRendersEnterCode() = hostShot("host-entercode", authedAt(Route.EnterCode).copy(pendingDevice = null))
+  @Test fun hostRendersAuthorize() = hostShot("host-authorize", authedAt(Route.AuthorizeDevice))
+  @Test fun hostRendersDenied() = hostShot("host-device-denied", authedAt(Route.AuthorizeDevice, "denied"))
+  @Test fun hostRendersExpired() = hostShot("host-device-expired", authedAt(Route.AuthorizeDevice, "expired"))
+  @Test fun hostRendersApproved() = hostShot("host-device-approved", authedAt(Route.AuthorizeDevice, "approved"))
+
   @Test fun routeCardAction_splits_openDetail_from_platform_handoffs() {
     val store = createAppStore(debug = false)
     store.dispatch(CardsLoaded(listOf(typed())))

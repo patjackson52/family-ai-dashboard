@@ -136,6 +136,90 @@ class AuthReducerTest {
     assertEquals(listOf("c1"), s.devices.map { it.id })
   }
 
+  // ── CLI/device approval (S6-D) ──
+  private val ownerFam = FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active")
+  private val memberFam = FamilyMembership("fam2", "Riveras", role = "adult", status = "active")
+  private val dev = PendingDevice("WDJF-7K2P", client = "dayfold-cli", originKind = "datacenter")
+
+  @Test fun `ownerFamiliesFor keeps only active owner families`() {
+    val out = ownerFamiliesFor(listOf(ownerFam, memberFam, FamilyMembership("fam3", role = "owner", status = "pending")))
+    assertEquals(listOf("fam1"), out.map { it.familyId })
+  }
+
+  @Test fun `OpenEnterCode routes to EnterCode and clears device fields`() {
+    val dirty = AppState(
+      route = Route.AuthorizeDevice, pendingDevice = dev, deviceBusy = true,
+      deviceError = "x", deviceOutcome = "denied",
+    )
+    val s = rootReducer(dirty, OpenEnterCode)
+    assertEquals(Route.EnterCode, s.route)
+    assertNull(s.pendingDevice); assertFalse(s.deviceBusy); assertNull(s.deviceError); assertNull(s.deviceOutcome)
+  }
+
+  @Test fun `DeviceLookupRequested sets busy and clears the error`() {
+    val s = rootReducer(AppState(route = Route.EnterCode, deviceError = "old"), DeviceLookupRequested)
+    assertTrue(s.deviceBusy); assertNull(s.deviceError)
+  }
+
+  @Test fun `DevicePendingLoaded routes to AuthorizeDevice with the device`() {
+    val s = rootReducer(AppState(route = Route.EnterCode, deviceBusy = true), DevicePendingLoaded(dev))
+    assertEquals(Route.AuthorizeDevice, s.route)
+    assertEquals(dev, s.pendingDevice); assertFalse(s.deviceBusy); assertNull(s.deviceOutcome)
+  }
+
+  @Test fun `DeviceLookupNotFound routes to AuthorizeDevice with the expired outcome`() {
+    val s = rootReducer(AppState(route = Route.EnterCode, deviceBusy = true), DeviceLookupNotFound)
+    assertEquals(Route.AuthorizeDevice, s.route)
+    assertEquals("expired", s.deviceOutcome); assertNull(s.pendingDevice); assertFalse(s.deviceBusy)
+  }
+
+  @Test fun `DeviceLookupFailed surfaces the inline error and stays on EnterCode`() {
+    val s = rootReducer(AppState(route = Route.EnterCode, deviceBusy = true), DeviceLookupFailed("Too many tries"))
+    assertEquals(Route.EnterCode, s.route)            // does NOT navigate
+    assertEquals("Too many tries", s.deviceError); assertFalse(s.deviceBusy)
+  }
+
+  @Test fun `approve and deny flows set busy then the terminal outcome`() {
+    val onScreen = AppState(route = Route.AuthorizeDevice, pendingDevice = dev)
+    var s = rootReducer(onScreen, ApproveDeviceRequested)
+    assertTrue(s.deviceBusy)
+    s = rootReducer(s, DeviceApproved)
+    assertFalse(s.deviceBusy); assertEquals("approved", s.deviceOutcome)
+
+    s = rootReducer(rootReducer(onScreen, DenyDeviceRequested), DeviceDenied)
+    assertEquals("denied", s.deviceOutcome); assertFalse(s.deviceBusy)
+
+    s = rootReducer(rootReducer(onScreen, ApproveDeviceRequested), DeviceApproveExpired)
+    assertEquals("expired", s.deviceOutcome); assertFalse(s.deviceBusy)
+  }
+
+  @Test fun `DeviceOpFailed surfaces an inline error and clears busy (stays on AuthorizeDevice)`() {
+    val s = rootReducer(AppState(route = Route.AuthorizeDevice, pendingDevice = dev, deviceBusy = true), DeviceOpFailed("Couldn't approve"))
+    assertEquals(Route.AuthorizeDevice, s.route)
+    assertEquals("Couldn't approve", s.deviceError); assertFalse(s.deviceBusy); assertNull(s.deviceOutcome)
+  }
+
+  @Test fun `CloseDeviceFlow returns to the gate and clears device state`() {
+    val onScreen = AppState(
+      session = sess, families = listOf(active), activeFamilyId = "fam1",
+      route = Route.AuthorizeDevice, pendingDevice = dev, deviceOutcome = "approved", deviceError = "x",
+    )
+    val s = rootReducer(onScreen, CloseDeviceFlow)
+    assertEquals(Route.Feed, s.route)                 // routeFor(session, active family) = Feed
+    assertNull(s.pendingDevice); assertNull(s.deviceOutcome); assertNull(s.deviceError); assertFalse(s.deviceBusy)
+  }
+
+  @Test fun `deep-link code stashes then is consumed, and sign-out clears it`() {
+    var s = rootReducer(AppState(route = Route.SignIn), DeviceLinkStashed("WDJF-7K2P"))
+    assertEquals("WDJF-7K2P", s.pendingDeviceLink)
+    assertEquals(Route.SignIn, s.route)                 // stashing does not navigate
+    s = rootReducer(s, DeviceLinkConsumed)
+    assertNull(s.pendingDeviceLink)
+    // a stash that survives to a signed-in session is wiped on sign-out (fresh state)
+    val signedOut = rootReducer(AppState(session = sess, pendingDeviceLink = "X"), SignedOut)
+    assertNull(signedOut.pendingDeviceLink)
+  }
+
   @Test fun `sign-out clears session and feed back to SignIn`() {
     val signedIn = AppState(
       cards = listOf(Card("c", title = "T")), session = sess,

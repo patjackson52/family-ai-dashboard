@@ -31,7 +31,7 @@ import com.sloopworks.dayfold.client.cards.TypedCardItem
 // Composable (commonMain-compatible) — the Android/iOS/desktop shells host it.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccount: () -> Unit = {}) {
+fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccount: () -> Unit = {}, onConnectDevice: () -> Unit = {}) {
   Scaffold(topBar = {
     TopAppBar(
       title = { Text("Today") },
@@ -57,7 +57,7 @@ fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccou
         when {
           state.syncing -> Text("Syncing…")
           state.error != null -> Text(state.error)
-          else -> FamilyNullState()
+          else -> FamilyNullState(onConnectDevice = onConnectDevice)
         }
       }
     } else {

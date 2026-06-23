@@ -42,5 +42,8 @@ fun MainViewController(): UIViewController = ComposeUIViewController {
     onRemoveMember = { uid -> scope.launch { store.state.activeFamilyId?.let { authEngine.removeMember(it, uid) } } },
     onLoadDevices = { scope.launch { authEngine.loadDevices() } },
     onRevokeDevice = { id -> scope.launch { authEngine.revokeDevice(id) } },
+    onLookupDevice = { code -> scope.launch { authEngine.lookupDevice(code) } },
+    onApproveDevice = { fid -> scope.launch { authEngine.approveDevice(fid, store.state.pendingDevice?.userCode ?: return@launch) } },
+    onDenyDevice = { fid -> scope.launch { authEngine.denyDevice(fid, store.state.pendingDevice?.userCode ?: return@launch) } },
   )
 }

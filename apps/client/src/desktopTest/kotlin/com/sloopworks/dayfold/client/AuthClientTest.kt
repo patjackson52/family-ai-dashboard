@@ -263,4 +263,71 @@ class AuthClientTest {
     val ex = assertFailsWith<AuthHttpException> { client(engine).revokeCredential("A", "x") }
     assertEquals(404, ex.status)
   }
+
+  // ── CLI/device approval (S6-D) ──
+  @Test fun `devicePending 200 parses the grant incl origin_kind with the bearer + query`() = runBlocking {
+    var path = ""; var query = ""; var auth: String? = null
+    val engine = MockEngine { req ->
+      path = req.url.encodedPath; query = req.url.encodedQuery; auth = req.headers[HttpHeaders.Authorization]
+      respond(
+        """{"user_code":"WDJF-7K2P","client":"dayfold-cli","origin_ip":"1.2.3.4",
+          "origin_ua":"curl/8","origin_kind":"datacenter","created_at":"2026-06-23T10:00:00Z",
+          "expires_at":"2026-06-23T10:10:00Z"}""",
+        HttpStatusCode.OK, jsonCt,
+      )
+    }
+    val r = client(engine).devicePending("ACCESS", "WDJF-7K2P")
+    assertEquals("/device/pending", path)
+    assertEquals("user_code=WDJF-7K2P", query)
+    assertEquals("Bearer ACCESS", auth)
+    assertTrue(r is DeviceLookupResult.Found)
+    assertEquals("datacenter", r.device.originKind)
+    assertEquals("dayfold-cli", r.device.client)
+  }
+
+  @Test fun `devicePending url-encodes the user_code`() = runBlocking {
+    var query = ""
+    val engine = MockEngine { req -> query = req.url.encodedQuery; respond("", HttpStatusCode.NotFound) }
+    client(engine).devicePending("A", "a b")
+    // whitespace must be percent-encoded (not a raw space) so it can't break the query.
+    assertTrue(query.contains("a%20b") && !query.contains("a b"), "query was: $query")
+  }
+
+  @Test fun `devicePending 404 is NotFound and 429 is Locked`() = runBlocking {
+    val miss = MockEngine { respond("""{"type":"not-found"}""", HttpStatusCode.NotFound, jsonCt) }
+    assertEquals(DeviceLookupResult.NotFound, client(miss).devicePending("A", "X"))
+    val locked = MockEngine { respond("", HttpStatusCode.TooManyRequests) }
+    assertEquals(DeviceLookupResult.Locked, client(locked).devicePending("A", "X"))
+  }
+
+  @Test fun `devicePending throws on 401 (→ engine refresh-and-retry)`() = runBlocking<Unit> {
+    val engine = MockEngine { respond("", HttpStatusCode.Unauthorized) }
+    val ex = assertFailsWith<AuthHttpException> { client(engine).devicePending("A", "X") }
+    assertEquals(401, ex.status)
+  }
+
+  @Test fun `deviceApprove posts user_code to the family path and maps statuses`() = runBlocking {
+    var path = ""; var sent = ""
+    val ok = MockEngine { req -> path = req.url.encodedPath; sent = body(req); respond("", HttpStatusCode.NoContent) }
+    assertEquals(DeviceActionResult.Ok, client(ok).deviceApprove("ACCESS", "fam1", "WDJF-7K2P"))
+    assertEquals("/families/fam1/device/approve", path)
+    assertTrue(sent.contains("\"user_code\":\"WDJF-7K2P\""), "body was: $sent")
+
+    assertEquals(DeviceActionResult.Expired, client(MockEngine { respond("", HttpStatusCode.NotFound) }).deviceApprove("A", "f", "X"))
+    assertEquals(DeviceActionResult.Locked, client(MockEngine { respond("", HttpStatusCode.TooManyRequests) }).deviceApprove("A", "f", "X"))
+    assertEquals(DeviceActionResult.Forbidden, client(MockEngine { respond("", HttpStatusCode.Forbidden) }).deviceApprove("A", "f", "X"))
+  }
+
+  @Test fun `deviceApprove throws on 401`() = runBlocking<Unit> {
+    val ex = assertFailsWith<AuthHttpException> { client(MockEngine { respond("", HttpStatusCode.Unauthorized) }).deviceApprove("A", "f", "X") }
+    assertEquals(401, ex.status)
+  }
+
+  @Test fun `deviceDeny treats 204 and 404 both as Ok (gone == denied)`() = runBlocking {
+    var path = ""
+    val ok = MockEngine { req -> path = req.url.encodedPath; respond("", HttpStatusCode.NoContent) }
+    assertEquals(DeviceActionResult.Ok, client(ok).deviceDeny("ACCESS", "fam1", "X"))
+    assertEquals("/families/fam1/device/deny", path)
+    assertEquals(DeviceActionResult.Ok, client(MockEngine { respond("", HttpStatusCode.NotFound) }).deviceDeny("A", "f", "X"))
+  }
 }

@@ -150,7 +150,22 @@ data class FamilyMembership(
 // The app's first navigation surface (ADR 0013: f(state)→UI, no nav library).
 // Family-null is a Feed SUBSTATE (the active family has no members yet), not a
 // route — keeps the gate minimal.
-enum class Route { Loading, SignIn, AuthError, CreateFamily, Feed, Account, JoinInvite, Members, Devices }
+enum class Route { Loading, SignIn, AuthError, CreateFamily, Feed, Account, JoinInvite, Members, Devices, EnterCode, AuthorizeDevice }
+
+// AUTH-S6-D: a pending device/CLI grant the owner is being asked to approve
+// (GET /device/pending). No device_code / user_id / credential — only what the
+// approve screen renders. originKind ∈ datacenter|residential|unknown (the
+// no-vendor CIDR classifier) drives the anti-phishing warning (ADR 0011 §7).
+@Serializable
+data class PendingDevice(
+  @SerialName("user_code") val userCode: String,
+  val client: String? = null,
+  @SerialName("origin_ip") val originIp: String? = null,
+  @SerialName("origin_ua") val originUa: String? = null,
+  @SerialName("origin_kind") val originKind: String? = null,
+  @SerialName("created_at") val createdAt: String? = null,
+  @SerialName("expires_at") val expiresAt: String? = null,
+)
 
 // Redux state (client state tree). The feed cursor lives in the DB (sync_meta),
 // not here — the store is a projection of the DB. The auth fields below are the
@@ -185,6 +200,17 @@ data class AppState(
   val members: List<FamilyMember> = emptyList(),
   // connected devices/apps — the caller's credentials (GET /auth/me/credentials).
   val devices: List<DeviceCredential> = emptyList(),
+  // CLI/device approval (S6-D). The pending grant being reviewed + a busy flag +
+  // an inline error (lookup transient/lockout). deviceOutcome is the terminal
+  // screen the AuthorizeDevice route renders: null | "denied" | "expired" | "approved".
+  val pendingDevice: PendingDevice? = null,
+  val deviceBusy: Boolean = false,
+  val deviceError: String? = null,
+  val deviceOutcome: String? = null,
+  // Deep-link (Phase 2): a user_code captured from an App/Universal Link before
+  // the owner was signed in. Stashed here, then consumed + looked up once sign-in
+  // resolves memberships (cold-install resume). Null = nothing pending.
+  val pendingDeviceLink: String? = null,
 )
 
 // Actions. Card data reaches the store ONLY via CardsLoaded (the DB→store bridge);
@@ -239,3 +265,21 @@ data object ApprovalsRequested : Action
 data class ApprovalsLoaded(val pending: List<PendingMember>) : Action
 data class MemberResolved(val uid: String) : Action           // approved or declined → drop from the queue
 data object ApprovalsFailed : Action
+// CLI/device approval (S6-D). The engine drives the *Requested/*Loaded/*Failed
+// effect-trigger pattern (like approvals/join); the reducer stays pure.
+data object OpenEnterCode : Action                             // → EnterCode (clears the device fields)
+data object DeviceLookupRequested : Action                    // engine: lookup start (busy)
+data class DevicePendingLoaded(val device: PendingDevice) : Action  // 200 → AuthorizeDevice
+data object DeviceLookupNotFound : Action                     // 404 → AuthorizeDevice + outcome "expired"
+data class DeviceLookupFailed(val message: String) : Action   // transient/429 → stay on EnterCode, inline error
+data object ApproveDeviceRequested : Action                   // engine: approve start (busy)
+data object DenyDeviceRequested : Action                      // engine: deny start (busy)
+data object DeviceApproved : Action                           // 204 → outcome "approved"
+data object DeviceDenied : Action                             // 204 (or gone) → outcome "denied"
+data object DeviceApproveExpired : Action                     // approve 404 race → outcome "expired"
+data class DeviceOpFailed(val message: String) : Action       // approve/deny transient/403/429 → inline error
+data object CloseDeviceFlow : Action                          // exit → routeFor(session, families)
+// Deep-link (Phase 2): stash a user_code from a link tapped before sign-in;
+// consume it once memberships resolve (engine then looks it up → AuthorizeDevice).
+data class DeviceLinkStashed(val code: String) : Action
+data object DeviceLinkConsumed : Action

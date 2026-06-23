@@ -21,6 +21,12 @@ fun routeFor(session: Session?, families: List<FamilyMembership>): Route = when 
 fun activeFamilyIdFor(families: List<FamilyMembership>): String? =
   families.firstOrNull { it.status == "active" }?.familyId
 
+// S6-D [C2]: a device grant can only be approved against a family the caller
+// OWNS (a member-family approve → 403). The AuthorizeDevice family selector lists
+// these; an empty result means the caller can't approve at all.
+fun ownerFamiliesFor(families: List<FamilyMembership>): List<FamilyMembership> =
+  families.filter { it.role == "owner" && it.status == "active" }
+
 // Hand-written root reducer (locked decision: no combineReducers). Card data
 // arrives only via CardsLoaded (DB→store bridge); sync actions carry status only.
 // Auth actions (S5) recompute route/activeFamilyId from (session, families).
@@ -96,6 +102,31 @@ fun rootReducer(state: AppState, action: Any): AppState = when (action) {
   is ApprovalsLoaded -> state.copy(approvalsBusy = false, pendingApprovals = action.pending)
   is MemberResolved -> state.copy(pendingApprovals = state.pendingApprovals.filterNot { it.uid == action.uid })
   is ApprovalsFailed -> state.copy(approvalsBusy = false)
+
+  // ── CLI/device approval (S6-D) ──
+  is OpenEnterCode -> state.copy(
+    route = Route.EnterCode, pendingDevice = null, deviceBusy = false, deviceError = null, deviceOutcome = null,
+  )
+  is DeviceLookupRequested -> state.copy(deviceBusy = true, deviceError = null)
+  is DevicePendingLoaded -> state.copy(
+    deviceBusy = false, pendingDevice = action.device, route = Route.AuthorizeDevice, deviceOutcome = null,
+  )
+  is DeviceLookupNotFound -> state.copy(
+    deviceBusy = false, pendingDevice = null, route = Route.AuthorizeDevice, deviceOutcome = "expired",
+  )
+  is DeviceLookupFailed -> state.copy(deviceBusy = false, deviceError = action.message)  // stays on EnterCode
+  is ApproveDeviceRequested -> state.copy(deviceBusy = true, deviceError = null)
+  is DenyDeviceRequested -> state.copy(deviceBusy = true, deviceError = null)
+  is DeviceApproved -> state.copy(deviceBusy = false, deviceOutcome = "approved")
+  is DeviceDenied -> state.copy(deviceBusy = false, deviceOutcome = "denied")
+  is DeviceApproveExpired -> state.copy(deviceBusy = false, deviceOutcome = "expired")
+  is DeviceOpFailed -> state.copy(deviceBusy = false, deviceError = action.message)
+  is CloseDeviceFlow -> state.copy(
+    route = routeFor(state.session, state.families),
+    pendingDevice = null, deviceBusy = false, deviceError = null, deviceOutcome = null,
+  )
+  is DeviceLinkStashed -> state.copy(pendingDeviceLink = action.code)   // await sign-in
+  is DeviceLinkConsumed -> state.copy(pendingDeviceLink = null)         // engine looks it up
 
   else -> state
 }

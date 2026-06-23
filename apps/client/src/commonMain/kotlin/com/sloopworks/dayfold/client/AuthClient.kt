@@ -9,6 +9,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLQueryComponent
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -48,6 +49,7 @@ class AuthClient(
   @Serializable private data class ApprovalsResp(val pending: List<PendingMember> = emptyList())
   @Serializable private data class MembersResp(val members: List<FamilyMember> = emptyList())
   @Serializable private data class CredsResp(val credentials: List<DeviceCredential> = emptyList())
+  @Serializable private data class DeviceCodeReq(@SerialName("user_code") val userCode: String)
 
   /** POST /auth/dev-token (Bearer DEV_AUTH_SECRET) → a real backend session. Dev/test only. */
   suspend fun devToken(provider: String, providerUid: String, devSecret: String): Session {
@@ -178,6 +180,70 @@ class AuthClient(
     val resp = http.delete("$api/auth/me/credentials/$id") { header("authorization", "Bearer $access") }
     if (resp.status.value !in 200..204) throw AuthHttpException(resp.status.value, "revoke-credential")
   }
+
+  // ── CLI/device approval (S6-D, ADR 0011 §6/7) ──
+  // 401 always THROWS (so AuthEngine.callWithRefresh rotates + retries); every
+  // other non-2xx is a TYPED result the engine maps to an action. 403 ≠ 404:
+  // read-scope/permission = 403, not-found/expired = 404 (distinct handling).
+
+  /** GET /device/pending?user_code= (session-auth) → the grant the approve screen renders. */
+  suspend fun devicePending(access: String, userCode: String): DeviceLookupResult {
+    val resp = http.get("$api/device/pending?user_code=${userCode.encodeURLQueryComponent()}") {
+      header("authorization", "Bearer $access")
+    }
+    return when (resp.status.value) {
+      200 -> DeviceLookupResult.Found(json.decodeFromString(PendingDevice.serializer(), resp.bodyAsText()))
+      404 -> DeviceLookupResult.NotFound                 // uniform miss/expired
+      429 -> DeviceLookupResult.Locked                   // shared account:approve:<sub> lockout
+      else -> throw AuthHttpException(resp.status.value, "device-pending")   // 401 → callWithRefresh
+    }
+  }
+
+  /** POST /families/{fid}/device/approve {user_code} (owner) → grant the device access. */
+  suspend fun deviceApprove(access: String, fid: String, userCode: String): DeviceActionResult {
+    val resp = http.post("$api/families/$fid/device/approve") {
+      header("authorization", "Bearer $access")
+      contentType(ContentType.Application.Json)
+      setBody(json.encodeToString(DeviceCodeReq.serializer(), DeviceCodeReq(userCode)))
+    }
+    return when (resp.status.value) {
+      in 200..204 -> DeviceActionResult.Ok
+      404 -> DeviceActionResult.Expired                  // not-pending/expired race
+      429 -> DeviceActionResult.Locked
+      403 -> DeviceActionResult.Forbidden                // non-owner family
+      else -> throw AuthHttpException(resp.status.value, "device-approve")
+    }
+  }
+
+  /** POST /families/{fid}/device/deny {user_code} (owner). 204/404 both mean "gone" → denied. */
+  suspend fun deviceDeny(access: String, fid: String, userCode: String): DeviceActionResult {
+    val resp = http.post("$api/families/$fid/device/deny") {
+      header("authorization", "Bearer $access")
+      contentType(ContentType.Application.Json)
+      setBody(json.encodeToString(DeviceCodeReq.serializer(), DeviceCodeReq(userCode)))
+    }
+    return when (resp.status.value) {
+      in 200..204, 404 -> DeviceActionResult.Ok          // gone == denied (idempotent)
+      429 -> DeviceActionResult.Locked
+      403 -> DeviceActionResult.Forbidden
+      else -> throw AuthHttpException(resp.status.value, "device-deny")
+    }
+  }
+}
+
+// GET /device/pending → typed lookup outcome (401 throws → refresh-and-retry).
+sealed interface DeviceLookupResult {
+  data class Found(val device: PendingDevice) : DeviceLookupResult
+  data object NotFound : DeviceLookupResult   // 404 — uniform miss/expired
+  data object Locked : DeviceLookupResult     // 429 — shared approve lockout
+}
+
+// approve/deny outcome (401 throws → refresh-and-retry).
+sealed interface DeviceActionResult {
+  data object Ok : DeviceActionResult         // 204 (or 404-on-deny: gone == denied)
+  data object Expired : DeviceActionResult    // approve 404 — not pending anymore
+  data object Locked : DeviceActionResult     // 429
+  data object Forbidden : DeviceActionResult  // 403 — caller isn't this family's owner
 }
 
 // A connected device/app — one of the caller's credentials (GET /auth/me/

@@ -167,6 +167,81 @@ class AuthEngine(
     }
   }
 
+  // ── CLI/device approval (S6-D) ──
+
+  /** Look up a pending device grant by user_code (session-auth) → AuthorizeDevice. */
+  suspend fun lookupDevice(code: String) = mutex.withLock { lookupDeviceLocked(code) }
+
+  // Lookup core WITHOUT the mutex — callable from already-locked paths (the
+  // deep-link resume runs inside restore()/signIn()'s lock; Mutex isn't reentrant).
+  private suspend fun lookupDeviceLocked(code: String) {
+    val session = store.state.session ?: return
+    store.dispatch(DeviceLookupRequested)
+    try {
+      when (val r = callWithRefresh(session) { authClient.devicePending(it.access, code) }) {
+        is DeviceLookupResult.Found -> store.dispatch(DevicePendingLoaded(r.device))
+        DeviceLookupResult.NotFound -> store.dispatch(DeviceLookupNotFound)
+        DeviceLookupResult.Locked -> store.dispatch(DeviceLookupFailed("Too many tries — wait about 15 minutes."))
+      }
+    } catch (e: Exception) {
+      store.dispatch(DeviceLookupFailed("Couldn't check that code. Try again."))
+    }
+  }
+
+  /**
+   * Deep-link entry (Phase 2): an App/Universal Link or scanned QR resolved to
+   * [raw] (`<origin>/device?user_code=…` or a bare code). Signed-in → look it up
+   * now (→ AuthorizeDevice); not signed-in → stash it and resume after sign-in.
+   * Malformed payloads are ignored (no nav, no stash). Platform intent/userActivity
+   * handlers call this; the App-Links/Universal-Links host verification + manifest
+   * intent-filters are the operator-gated half of Phase 2 (cert fingerprint / Team ID).
+   */
+  suspend fun openDeviceLink(raw: String) {
+    val code = parseDeviceCode(raw) ?: return
+    if (store.state.session != null) lookupDevice(code)
+    else store.dispatch(DeviceLinkStashed(code))
+  }
+
+  // If a deep-link code was stashed before sign-in, consume it and open the approve
+  // screen now. Called at the tail of loadMemberships (already holding the mutex).
+  private suspend fun resumePendingDeviceLink() {
+    val code = store.state.pendingDeviceLink ?: return
+    if (store.state.session == null) return
+    store.dispatch(DeviceLinkConsumed)
+    lookupDeviceLocked(code)
+  }
+
+  /** Owner approves the pending device against [fid] → DeviceApproved / expired / failed. */
+  suspend fun approveDevice(fid: String, code: String) = mutex.withLock {
+    val session = store.state.session ?: return@withLock
+    store.dispatch(ApproveDeviceRequested)
+    try {
+      when (callWithRefresh(session) { authClient.deviceApprove(it.access, fid, code) }) {
+        DeviceActionResult.Ok -> store.dispatch(DeviceApproved)
+        DeviceActionResult.Expired -> store.dispatch(DeviceApproveExpired)
+        DeviceActionResult.Locked -> store.dispatch(DeviceOpFailed("Too many tries — wait about 15 minutes."))
+        DeviceActionResult.Forbidden -> store.dispatch(DeviceOpFailed("You're not an owner of that family."))
+      }
+    } catch (e: Exception) {
+      store.dispatch(DeviceOpFailed("Couldn't approve. Try again."))
+    }
+  }
+
+  /** Owner denies the pending device → DeviceDenied (Ok or already-gone) / failed. */
+  suspend fun denyDevice(fid: String, code: String) = mutex.withLock {
+    val session = store.state.session ?: return@withLock
+    store.dispatch(DenyDeviceRequested)
+    try {
+      when (callWithRefresh(session) { authClient.deviceDeny(it.access, fid, code) }) {
+        DeviceActionResult.Ok, DeviceActionResult.Expired -> store.dispatch(DeviceDenied)  // gone == denied
+        DeviceActionResult.Locked -> store.dispatch(DeviceOpFailed("Too many tries — wait about 15 minutes."))
+        DeviceActionResult.Forbidden -> store.dispatch(DeviceOpFailed("You're not an owner of that family."))
+      }
+    } catch (e: Exception) {
+      store.dispatch(DeviceOpFailed("Couldn't deny. Try again."))
+    }
+  }
+
   /** Current access token (for the SyncClient token provider, wired at T6). */
   fun accessToken(): String? = store.state.session?.access
 
@@ -176,6 +251,7 @@ class AuthEngine(
     try {
       val who = callWithRefresh(session) { authClient.whoami(it.access) }
       store.dispatch(MembershipsLoaded(who.families))
+      resumePendingDeviceLink()   // cold-install resume: open a link stashed pre-sign-in
     } catch (e: AuthHttpException) {
       // 401 here = access expired AND refresh couldn't recover (revoked/expired/
       // reused) → the saved session is dead. Clear it and fall back to Sign-in so

@@ -56,6 +56,9 @@ fun FeedApp(
   onRemoveMember: (String) -> Unit = {},
   onLoadDevices: () -> Unit = {},
   onRevokeDevice: (String) -> Unit = {},
+  onLookupDevice: (String) -> Unit = {},
+  onApproveDevice: (String) -> Unit = {},
+  onDenyDevice: (String) -> Unit = {},
 ) {
   val state by store.selectorState { it }
   // One stable handler (remembered so feed/detail stay skippable): OpenDetail is
@@ -74,7 +77,18 @@ fun FeedApp(
         onCreate = onCreateFamily, onJoinInvite = { store.dispatch(OpenJoinInvite) },
       )
       Route.JoinInvite -> JoinInviteScreen(state, onJoin = onRedeemInvite, onDismiss = { store.dispatch(JoinDismissed) })
-      Route.Feed -> ContentHost(store, state, handle)
+      Route.Feed -> ContentHost(store, state, handle, onConnectDevice = { store.dispatch(OpenEnterCode) })
+      Route.EnterCode -> EnterCodeScreen(
+        state, onLookup = onLookupDevice, onBack = { store.dispatch(CloseDeviceFlow) },
+        // Scanner + deep-link are Phase 2 — leave onScan null (button hidden).
+        onScan = null,
+      )
+      Route.AuthorizeDevice -> when (state.deviceOutcome) {
+        "denied" -> DeviceDeniedScreen(onDone = { store.dispatch(CloseDeviceFlow) })
+        "expired" -> DeviceExpiredScreen(onRetry = { store.dispatch(OpenEnterCode) }, onDone = { store.dispatch(CloseDeviceFlow) })
+        "approved" -> DeviceApprovedConfirm(onDone = { store.dispatch(CloseDeviceFlow) })
+        else -> AuthorizeDeviceScreen(state, onApprove = onApproveDevice, onDeny = onDenyDevice, onCancel = { store.dispatch(CloseDeviceFlow) })
+      }
       Route.Account -> AccountScreen(
         state, onSignOut = onSignOut, onClose = { store.dispatch(CloseAccount) },
         onOpenMembers = { store.dispatch(OpenMembers) },
@@ -82,6 +96,7 @@ fun FeedApp(
       )
       Route.Devices -> DevicesScreen(
         state, onLoad = onLoadDevices, onRevoke = onRevokeDevice, onBack = { store.dispatch(OpenAccount) },
+        onConnectDevice = { store.dispatch(OpenEnterCode) },
       )
       Route.Members -> MembersScreen(
         state, onApprove = onApproveMember, onDecline = onDeclineMember,
@@ -98,7 +113,7 @@ fun FeedApp(
 // cross-fade; the shared element drives the bounds morph. Asymmetric timing.
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun ContentHost(store: Store<AppState>, state: AppState, handle: (CardAction) -> Unit) {
+private fun ContentHost(store: Store<AppState>, state: AppState, handle: (CardAction) -> Unit, onConnectDevice: () -> Unit = {}) {
   val detail = currentDetailCard(state)
   SharedTransitionLayout {
     AnimatedContent(
@@ -116,7 +131,7 @@ private fun ContentHost(store: Store<AppState>, state: AppState, handle: (CardAc
       ) {
         val card = id?.let { cid -> state.cards.find { it.id == cid } }
         if (card != null) DetailScreen(card, onBack = { store.dispatch(NavBack) }, onAction = handle)
-        else FeedScreen(state, onAction = handle, onOpenAccount = { store.dispatch(OpenAccount) })
+        else FeedScreen(state, onAction = handle, onOpenAccount = { store.dispatch(OpenAccount) }, onConnectDevice = onConnectDevice)
       }
     }
   }

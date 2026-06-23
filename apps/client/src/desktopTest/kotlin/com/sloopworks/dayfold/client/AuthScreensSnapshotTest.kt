@@ -73,4 +73,34 @@ class AuthScreensSnapshotTest {
       DeviceCredential("c2", kind = "cli", label = "claude-code · CI", lastUsedAt = "2026-06-19T09:00:00Z", lastUsedIp = "San Jose"),
     )))
   }
+
+  // ── CLI/device approval (S6-D) — A8b entercode/authorizedevice/devicedenied/deviceexpired ──
+  @Test fun enterCode() = snap("device-entercode") { EnterCodeScreen(AppState(route = Route.EnterCode)) }
+  @Test fun enterCodeDark() = snap("device-entercode-dark", dark = true) { EnterCodeScreen(AppState(route = Route.EnterCode)) }
+  @Test fun enterCodeError() = snap("device-entercode-error") {
+    EnterCodeScreen(AppState(route = Route.EnterCode, deviceError = "Too many tries — wait about 15 minutes."))
+  }
+
+  private fun authState(originKind: String, fams: List<FamilyMembership>) = AppState(
+    session = Session("a", "r"), families = fams, activeFamilyId = fams.firstOrNull()?.familyId,
+    route = Route.AuthorizeDevice,
+    pendingDevice = PendingDevice("WDJF-7K2P", client = "Dayfold CLI", originIp = "San Jose, CA · US",
+      originUa = "dayfold-cli/1.0 · macOS", originKind = originKind),
+  )
+  private val oneOwner = listOf(FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active"))
+  private val twoOwner = listOf(
+    FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active"),
+    FamilyMembership("fam2", "Lake House", role = "owner", status = "active"),
+  )
+
+  @Test fun authorizeDatacenter() = snap("device-authorize-datacenter") { AuthorizeDeviceScreen(authState("datacenter", oneOwner)) }
+  @Test fun authorizeDatacenterDark() = snap("device-authorize-datacenter-dark", dark = true) { AuthorizeDeviceScreen(authState("datacenter", oneOwner)) }
+  @Test fun authorizeResidential() = snap("device-authorize-residential") { AuthorizeDeviceScreen(authState("residential", oneOwner)) }
+  @Test fun authorizeMultiOwner() = snap("device-authorize-multiowner") { AuthorizeDeviceScreen(authState("residential", twoOwner)) }
+
+  @Test fun deviceDenied() = snap("device-denied") { DeviceDeniedScreen() }
+  @Test fun deviceDeniedDark() = snap("device-denied-dark", dark = true) { DeviceDeniedScreen() }
+  @Test fun deviceExpired() = snap("device-expired") { DeviceExpiredScreen() }
+  @Test fun deviceExpiredDark() = snap("device-expired-dark", dark = true) { DeviceExpiredScreen() }
+  @Test fun deviceApproved() = snap("device-approved") { DeviceApprovedConfirm() }
 }
