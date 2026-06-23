@@ -37,3 +37,11 @@ android {
   compileSdk = 35
   defaultConfig { minSdk = 34 }
 }
+
+// Gradle 9 fails a Test task that has compiled test sources but discovers zero
+// runnable tests. This module's only test source is ConsumerSmoke.kt — a
+// COMPILE-ONLY parity guard (byte-identical to :debugdrawer's) that proves the
+// no-op twin is API-swappable; it is intentionally never invoked. So desktopTest
+// legitimately discovers no tests. Opt this module out of the new check (the
+// real :debugdrawer module keeps it — it has BackendSeamTest).
+tasks.named<Test>("desktopTest") { failOnNoDiscoveredTests = false }
