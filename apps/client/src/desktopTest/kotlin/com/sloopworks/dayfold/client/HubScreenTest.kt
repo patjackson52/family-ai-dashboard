@@ -33,6 +33,34 @@ class HubScreenTest {
     onNodeWithText("Only people you choose can open this hub.").assertIsDisplayed()  // honesty line
   }
 
+  @Test fun detailRendersRichBlockTypes() = runComposeUiTest {
+    val tree = HubTree(
+      hub = Hub(id = "h1", title = "Party", status = "active", visibility = "family"),
+      sections = listOf(HubSection(id = "s1", hubId = "h1", title = "Plan", ord = 0)),
+      blocks = listOf(
+        HubBlock(id = "b_chk", sectionId = "s1", type = "checklist", ord = 0,
+          payload = BlockPayload(items = listOf(
+            ChecklistItem(text = "Sheet cake", done = false, due = "11am"),
+            ChecklistItem(text = "Candles", done = true)))),
+        HubBlock(id = "b_link", sectionId = "s1", type = "link", ord = 1,
+          payload = BlockPayload(label = "Party playlist", url = "open.spotify.com")),
+        HubBlock(id = "b_con", sectionId = "s1", type = "contact", ord = 2,
+          payload = BlockPayload(name = "Jake Rentals", role = "Bouncy castle", phone = "555-0100")),
+        HubBlock(id = "b_loc", sectionId = "s1", type = "location", ord = 3,
+          payload = BlockPayload(label = "Riverside Park", address = "Shelter B")),
+        HubBlock(id = "b_bud", sectionId = "s1", type = "budget", ord = 4,
+          payload = BlockPayload(total = 300.0, spent = 248.0)),
+      ),
+    )
+    val state = AppState(currentHubId = "h1", currentHubTree = tree)
+    setContent { MaterialTheme { HubDetailScreen(state) } }
+    onNodeWithText("Sheet cake").assertIsDisplayed()            // checklist row
+    onNodeWithText("Party playlist").assertIsDisplayed()        // link
+    onNodeWithText("Jake Rentals").assertIsDisplayed()          // contact
+    onNodeWithText("Riverside Park").assertIsDisplayed()        // location
+    onNodeWithText("${'$'}52 left").assertIsDisplayed()         // budget bar (300-248)
+  }
+
   @Test fun detailShowsNotFoundNoteOnRestrictedMiss() = runComposeUiTest {
     val state = AppState(currentHubId = "hX", currentHubTree = null, hubError = "That hub is no longer available.")
     setContent { MaterialTheme { HubDetailScreen(state) } }

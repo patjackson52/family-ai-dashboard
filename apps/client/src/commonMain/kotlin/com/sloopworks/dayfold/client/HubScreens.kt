@@ -1,8 +1,10 @@
 package com.sloopworks.dayfold.client
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,7 +31,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 
 // ── Hubs surface (ADR 0006 render · ADR 0030 visibility) ─────────────────────
@@ -206,49 +210,133 @@ private fun HubBlockCard(block: HubBlock) {
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     shape = RoundedCornerShape(22.dp),
   ) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       when (block.type) {
         "text", "markdown" -> Text(block.bodyMd ?: "", style = MaterialTheme.typography.bodyMedium)
-        "checklist" -> block.payload?.items?.forEach { item ->
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (item.done) "☑ " else "☐ ", style = MaterialTheme.typography.bodyMedium)
-            Text(item.text ?: "", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            item.due?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-          }
-        }
-        "link", "document" -> {
-          Text(block.payload?.label ?: block.payload?.url ?: block.type, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-          block.payload?.url?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        "contact" -> {
-          Text(block.payload?.name ?: "Contact", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-          val sub = listOfNotNull(block.payload?.role, block.payload?.phone, block.payload?.email).joinToString(" · ")
-          if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        "location" -> {
-          Text(block.payload?.label ?: "Location", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-          block.payload?.address?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        "milestone" -> {
-          Text(block.payload?.label ?: block.bodyMd ?: "Milestone", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-          block.payload?.date?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-        "budget" -> {
-          val total = block.payload?.total
-          val spent = block.payload?.spent
-          Text("Budget", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-          if (total != null) Text("${'$'}${spent ?: 0.0} / ${'$'}$total", style = MaterialTheme.typography.bodyMedium)
-        }
+        "checklist" -> block.payload?.items?.forEach { item -> ChecklistRow(item) }
+        "link", "document" -> LinkRow(block)
+        "contact" -> ContactRow(block.payload)
+        "location" -> LocationBlock(block.payload)
+        "milestone" -> MilestoneRow(block.payload, block.bodyMd)
+        "budget" -> BudgetBar(block.payload)
         else -> Text(block.bodyMd ?: block.type, style = MaterialTheme.typography.bodyMedium)
       }
-      // provenance (honesty constraint) — consistent caption when present
-      block.provenance?.source?.let { src ->
-        Text(
-          when (src) { "claude" -> "Added by Claude"; "email" -> "From your email"; "user" -> "You added this"; else -> "Saved" },
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
+      block.provenance?.source?.let { src -> ProvenanceChip(src) }
     }
   }
+}
+
+@Composable
+private fun ChecklistRow(item: ChecklistItem) {
+  Row(verticalAlignment = Alignment.CenterVertically) {
+    // filled coral check when done, outlined warm ring when not (design treatment)
+    val box = if (item.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+    Box(
+      Modifier.size(22.dp).clip(RoundedCornerShape(7.dp)).background(box)
+        .then(if (item.done) Modifier else Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(7.dp))),
+      contentAlignment = Alignment.Center,
+    ) { if (item.done) Text("✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary) }
+    Column(Modifier.padding(start = 12.dp).weight(1f)) {
+      Text(
+        item.text ?: "",
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (item.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        textDecoration = if (item.done) TextDecoration.LineThrough else null,
+      )
+      val sub = listOfNotNull(item.due?.let { "Due $it" }, item.assignee).joinToString(" · ")
+      if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+  }
+}
+
+@Composable
+private fun LinkRow(block: HubBlock) {
+  val p = block.payload
+  Row(verticalAlignment = Alignment.CenterVertically) {
+    IconTile(if (block.type == "document") "📄" else "🔗", MaterialTheme.colorScheme.tertiaryContainer)
+    Column(Modifier.padding(horizontal = 13.dp).weight(1f)) {
+      Text(p?.label ?: p?.url ?: block.type, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
+      (p?.domain ?: p?.url)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
+    }
+    Text("↗", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)  // opens externally (calm)
+  }
+}
+
+@Composable
+private fun ContactRow(p: BlockPayload?) {
+  Row(verticalAlignment = Alignment.CenterVertically) {
+    val initials = (p?.name ?: "?").split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.take(2).joinToString("")
+    Box(Modifier.size(44.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+      Text(initials, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+    }
+    Column(Modifier.padding(horizontal = 13.dp).weight(1f)) {
+      Text(p?.name ?: "Contact", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+      p?.role?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+    // round Call / Text affordances (OS handoff when wired — display here)
+    if (p?.phone != null) { RoundAffordance("📞"); Box(Modifier.width(8.dp)); RoundAffordance("💬") }
+  }
+}
+
+@Composable
+private fun LocationBlock(p: BlockPayload?) {
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // map placeholder tile (Coil3 map render is M1; a calm warm tile + pin at M0)
+    Box(
+      Modifier.fillMaxWidth().height(110.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+      contentAlignment = Alignment.Center,
+    ) { Text("📍", style = MaterialTheme.typography.headlineMedium) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Column(Modifier.weight(1f)) {
+        Text(p?.label ?: "Location", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        p?.address?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+      }
+      Text("Directions ↗", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    }
+  }
+}
+
+@Composable
+private fun MilestoneRow(p: BlockPayload?, bodyMd: String?) {
+  Row(verticalAlignment = Alignment.CenterVertically) {
+    Box(Modifier.size(11.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary))  // timeline dot
+    Column(Modifier.padding(start = 12.dp)) {
+      Text(p?.label ?: bodyMd ?: "Milestone", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+      p?.date?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+  }
+}
+
+@Composable
+private fun BudgetBar(p: BlockPayload?) {
+  val total = p?.total ?: 0.0
+  val spent = p?.spent ?: 0.0
+  val frac = if (total > 0) (spent / total).coerceIn(0.0, 1.0).toFloat() else 0f
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(verticalAlignment = Alignment.Bottom) {
+      Text("${'$'}${spent.toInt()}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+      Text(" / ${'$'}${total.toInt()}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+      Text("${'$'}${(total - spent).toInt()} left", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
+    }
+    Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+      Box(Modifier.fillMaxWidth(frac).height(10.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.secondary))
+    }
+  }
+}
+
+@Composable
+private fun IconTile(glyph: String, bg: androidx.compose.ui.graphics.Color) =
+  Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(bg), contentAlignment = Alignment.Center) { Text(glyph) }
+
+@Composable
+private fun RoundAffordance(glyph: String) =
+  Box(Modifier.size(40.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) { Text(glyph) }
+
+@Composable
+private fun ProvenanceChip(src: String) {
+  Text(
+    when (src) { "claude" -> "✦ Added by Claude"; "email" -> "From your email"; "user" -> "You added this"; else -> "Saved" },
+    style = MaterialTheme.typography.labelSmall,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+  )
 }
