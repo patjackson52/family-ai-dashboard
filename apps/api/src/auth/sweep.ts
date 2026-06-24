@@ -7,7 +7,7 @@ import { q } from "../db.ts";
 //
 // `graceMs` keeps very recent rows even if technically terminal/expired (avoids
 // racing an in-flight flow); default 24h.
-export interface SweepResult { rate_limits: number; device_authorizations: number; invites: number }
+export interface SweepResult { rate_limits: number; device_authorizations: number; invites: number; refresh_tokens: number }
 
 export async function sweep(graceMs = 24 * 3600 * 1000): Promise<SweepResult> {
   const grace = new Date(Date.now() - graceMs).toISOString();
@@ -34,5 +34,14 @@ export async function sweep(graceMs = 24 * 3600 * 1000): Promise<SweepResult> {
     [grace],
   )).rowCount ?? 0;
 
-  return { rate_limits: rate, device_authorizations: devices, invites };
+  // Refresh tokens past their ABSOLUTE lifetime. A replayed expired token is
+  // rejected by rotate() on expiry regardless, so deleting it loses no signal.
+  // SECURITY: only EXPIRED rows — a consumed-but-unexpired token is deliberately
+  // KEPT, because a replay of it must still be caught as reuse → revoke-lineage
+  // (ADR 0011 §5) until it expires. Never widen this to `consumed_at IS NOT NULL`.
+  const refresh = (await q(
+    `DELETE FROM refresh_tokens WHERE expires_at < $1`, [grace],
+  )).rowCount ?? 0;
+
+  return { rate_limits: rate, device_authorizations: devices, invites, refresh_tokens: refresh };
 }

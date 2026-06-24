@@ -47,6 +47,19 @@ describe("retention sweep", () => {
     expect((await q(`SELECT 1 FROM device_authorizations WHERE device_code='dc_fresh'`)).rowCount).toBe(1);
   });
 
+  it("sweeps EXPIRED refresh tokens but KEEPS consumed-but-unexpired ones (reuse-detection)", async () => {
+    await q(`INSERT INTO credentials(id,kind) VALUES ('swcred','app') ON CONFLICT DO NOTHING`);
+    await q(`INSERT INTO refresh_tokens(token_hash,credential_id,expires_at) VALUES ('rt_expired','swcred', now()-interval '2 days')`);              // past lifetime → swept
+    await q(`INSERT INTO refresh_tokens(token_hash,credential_id,consumed_at,expires_at) VALUES ('rt_consumed','swcred', now(), now()+interval '30 days')`); // consumed but live → KEEP (reuse-detection)
+    await q(`INSERT INTO refresh_tokens(token_hash,credential_id,expires_at) VALUES ('rt_fresh','swcred', now()+interval '30 days')`);                // live → keep
+
+    const r = await sweep();
+    expect(r.refresh_tokens).toBeGreaterThanOrEqual(1);
+    expect((await q(`SELECT 1 FROM refresh_tokens WHERE token_hash='rt_expired'`)).rowCount).toBe(0);   // gone
+    expect((await q(`SELECT 1 FROM refresh_tokens WHERE token_hash='rt_consumed'`)).rowCount).toBe(1);  // KEPT — replay must still be caught
+    expect((await q(`SELECT 1 FROM refresh_tokens WHERE token_hash='rt_fresh'`)).rowCount).toBe(1);     // kept
+  });
+
   it("deletes an orphan expired invite but KEEPS one a membership references", async () => {
     const o = await ownerOf("sweepowner");
     // a redeemed invite → a pending membership references it (used_count=1)
@@ -87,6 +100,7 @@ describe("GET /cron/sweep (Vercel Cron, CRON_SECRET-gated)", () => {
     expect(b).toHaveProperty("rate_limits");
     expect(b).toHaveProperty("device_authorizations");
     expect(b).toHaveProperty("invites");
+    expect(b).toHaveProperty("refresh_tokens");
     delete process.env.CRON_SECRET;
   });
 });

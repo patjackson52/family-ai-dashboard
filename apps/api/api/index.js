@@ -142,7 +142,11 @@ async function sweep(graceMs = 24 * 3600 * 1e3) {
          AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.invite_id = i.id)`,
     [grace]
   )).rowCount ?? 0;
-  return { rate_limits: rate, device_authorizations: devices, invites };
+  const refresh = (await q(
+    `DELETE FROM refresh_tokens WHERE expires_at < $1`,
+    [grace]
+  )).rowCount ?? 0;
+  return { rate_limits: rate, device_authorizations: devices, invites, refresh_tokens: refresh };
 }
 var init_sweep = __esm({
   "src/auth/sweep.ts"() {
