@@ -270,17 +270,28 @@ plan: `docs/superpowers/plans/2026-06-23-auth-s6d.md`.
   geo/ASN was deferred but ADR 0011 §7 mandates it (→ datacenter heuristic now);
   plaintext refresh token (→ keychain); read scope unenforced (→ `requireScope`).
 
-### TASK-AUTH-CONTENT — content-API + CLI content verbs + per-hub scoping (next)
-**Status:** queued after S6-D closes the login loop (operator-chosen 2026-06-23).
-The CLI today can only `PUT` one card — **no hub endpoints, no `pull`/`status`/
-`diff`, no content read**. This slice makes the CLI a real content read+write
-client and lands **per-hub/resource scope selection** (ADR 0029, Proposed).
+### TASK-AUTH-CONTENT — content-API + CLI content verbs + per-hub scoping (ACTIVE)
+**Status:** **gates cleared — in build** (worktree `claude/auth-content-slice`, off
+`main` 2026-06-24). ADR 0029 **Accepted** + operator re-approved 2026-06-24; ADR 0030
+(per-member visibility) **Accepted** 2026-06-23 — this slice now carries both. The
+CLI today can only `PUT` one card — **no hub endpoints, no `pull`/`status`/`diff`,
+no content read**. This slice makes the CLI a real content read+write client and
+lands **per-hub/resource scope selection** (ADR 0029) + **per-member hub visibility**
+(ADR 0030).
 - API: hub/section/block read+write endpoints, each behind `requireScope`.
+- ADR 0029: `credential_grants` table + resource-qualified scope resolution.
+- ADR 0030: hub `visibility`/`created_by` + hubs-only `resource_visibility` +
+  `→hubs.updated_at` touch-trigger + card `visibility`/`audience[]` + read-path
+  filter + visibility-aware `/sync` + client cache-wipe on tenancy 401/404.
 - CLI: `pull` / `hub get|archive|rm` / `status` / `push --dry-run|--diff`; `whoami`
   shows family + scope + label (07-cli.md).
-- Approval: `credential_grants` table + per-hub read/write picker on
-  `AuthorizeDevice` (replaces the interim informational scope row).
-- **Gate:** ADR 0029 acceptance (operator). Own spec → plan → build cycle.
+- Approval UI: per-hub read/write picker on `AuthorizeDevice` (replaces the interim
+  informational scope row). **Design/toolchain-gated** (Compose UI; not in the
+  first agent slice).
+- Hub **render** surface = **design-gated** (ADR 0008 hi-fi Hubs mockups + sign-off)
+  — out of this slice; this slice is API + data + CLI only.
+- Specs: `specs/domain-model/scope-and-access-model.md`, ADR 0029, ADR 0030. Own
+  spec → plan → build cycle.
 
 
 **AUTH-S4 (owner-approved invites + family-agnostic cred fix) — ✅ DONE (branch

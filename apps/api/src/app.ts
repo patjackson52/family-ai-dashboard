@@ -10,6 +10,10 @@ import * as repo from "./repo.ts";
 // Auth imports are lazy (dynamic) so that api.test.ts (no AUTH_* env) can still
 // load app.ts without triggering the module-level env-guard throws in tokens.ts.
 import { authorizeTenant } from "./auth/middleware.ts";
+import { requireScope, grantScopes, resolveGrants, scopeAllows, grantedHubIds } from "./auth/scope.ts";
+import { cardVisible } from "./content/visibility.ts";
+import * as hubs from "./content/hubs.ts";
+import { HubSchema, SectionSchema, BlockSchema } from "./generated/content.ts";
 
 export const app = new Hono();
 
@@ -30,13 +34,8 @@ function bearer(c: any): string | undefined {
   return h.startsWith("Bearer ") ? h.slice(7) : undefined;
 }
 
-// Central content scope gate (ADR 0029). A credential's authority covers an action
-// if it holds the global scope (`content:read`/`content:write`) OR a resource-
-// qualified grant (`hub:<id>:<action>` — selection lands with the content slice).
-// Resolved per request from `a.scopes`; never trusted from the token (ADR 0011 §8).
-function hasScope(a: { scopes: string[] }, scope: string): boolean {
-  return a.scopes.includes(scope);
-}
+// Content scope is gated by `requireScope` (ADR 0029, src/auth/scope.ts): resolved
+// per request from `credential_grants`, never from the token or `a.scopes`.
 
 function devAuthAllowed(_c: any): boolean {
   if (process.env.ENABLE_DEV_AUTH !== "1") return false;
@@ -61,6 +60,7 @@ app.post("/auth/dev-token", async (c) => {
     `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write}')`,
     [credentialId, userId],
   );
+  await grantScopes(credentialId, ["content:read", "content:write"]);   // ADR 0029 grant rows
   const { mintAccess } = await import("./auth/tokens.ts");
   const { issueRefresh } = await import("./auth/refresh.ts");
   const access = await mintAccess({ sub: userId, cid: credentialId });
@@ -336,25 +336,37 @@ app.put("/families/:fid/cards/:id", async (c) => {
   const fid = c.req.param("fid"), id = c.req.param("id");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:write")) return c.json({ type: "forbidden" }, 403);
+  if (!(await requireScope(a.cred.id, "content", "write"))) return c.json({ type: "forbidden" }, 403);
   const raw = await c.req.json().catch(() => null);
   if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
-  let body: any = stripServerManaged(raw);          // mass-assignment: drop server fields
+  // ADR 0030: visibility + author-stamped audience are authoring fields OUTSIDE the
+  // typed-card schema — extract + validate them, then strip before the strict parse.
+  if (raw.visibility !== undefined && raw.visibility !== "family" && raw.visibility !== "restricted")
+    return c.json({ type: "validation", issues: [{ path: ["visibility"], message: "family|restricted" }] }, 422);
+  const visibility = raw.visibility === "restricted" ? "restricted" : "family";
+  let audience: string[] | undefined;
+  if (visibility === "restricted") {
+    if (raw.audience !== undefined && (!Array.isArray(raw.audience) || raw.audience.some((x: any) => typeof x !== "string")))
+      return c.json({ type: "validation", issues: [{ path: ["audience"], message: "string[] of user ids" }] }, 422);
+    audience = Array.isArray(raw.audience) ? raw.audience : [];
+  }
+  const { visibility: _v, audience: _a, ...rest } = raw;          // strip before strict schema parse
+  let body: any = stripServerManaged(rest);          // mass-assignment: drop server fields
   body = stampProvenance(body, a.cred.id);           // un-forgeable provenance
   const parsed = BriefingCardSchema.safeParse({ ...body, id }); // path id wins
   if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
   // CL-2: type↔payload cross-check (zod validates the two independently).
   const cross = crossValidateCard(parsed.data as any);
   if (cross.length) return c.json({ type: "validation", issues: cross }, 422);
-  return c.json(await repo.upsertCard(fid, id, parsed.data), 200);
+  return c.json(await repo.upsertCard(fid, id, { ...parsed.data, visibility, audience }), 200);
 });
 
 app.get("/families/:fid/cards", async (c) => {
   const fid = c.req.param("fid");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:read")) return c.json({ type: "forbidden" }, 403);
-  return c.json(await repo.listCards(fid));
+  if (!(await requireScope(a.cred.id, "content", "read"))) return c.json({ type: "forbidden" }, 403);
+  return c.json(await repo.listCards(fid, { userId: a.userId, legacy: a.legacy }));
 });
 
 // Active member roster (member-gated — every member can see who's in the family).
@@ -377,8 +389,134 @@ app.delete("/families/:fid/cards/:id", async (c) => {
   const fid = c.req.param("fid"), id = c.req.param("id");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:write")) return c.json({ type: "forbidden" }, 403);
+  if (!(await requireScope(a.cred.id, "content", "write"))) return c.json({ type: "forbidden" }, 403);
   return c.body(null, (await repo.softDeleteCard(fid, id)) ? 204 : 404);
+});
+
+// ---- Hub content API (ADR 0006 hubs · ADR 0029 scope · ADR 0030 visibility) ----
+// Hub ids are resource-scope keys; constrain the charset so a ':' can't ambiguate a
+// grant string (`hub:<id>:read`). Sections/blocks are reachable ONLY via the hub
+// tree (visibility-gated there), so they inherit the hub's visibility.
+const HUB_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+app.get("/families/:fid/hubs", async (c) => {
+  const fid = c.req.param("fid");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  const grants = await resolveGrants(a.cred.id);
+  const hubGrantIds = grantedHubIds(grants, "read");          // null = global content:read
+  if (hubGrantIds !== null && hubGrantIds.length === 0) return c.json({ type: "forbidden" }, 403);
+  return c.json(await hubs.listHubs(fid, { userId: a.userId, legacy: a.legacy }, hubGrantIds));
+});
+
+app.get("/families/:fid/hubs/:id", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!(await requireScope(a.cred.id, `hub:${id}`, "read"))) return c.body(null, 404); // uniform 404 on scope-miss
+  const hub = await hubs.getHub(fid, id);
+  const caller = { userId: a.userId, legacy: a.legacy };
+  if (!hub) return c.body(null, 404);
+  const allow = await hubs.allowListFor(fid, id);
+  if (!hubs.hubVisible(hub, caller, () => !!caller.userId && allow.has(caller.userId))) return c.body(null, 404);
+  return c.json(hub);
+});
+
+app.get("/families/:fid/hubs/:id/tree", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!(await requireScope(a.cred.id, `hub:${id}`, "read"))) return c.body(null, 404);
+  const hub = await hubs.getHub(fid, id);
+  const caller = { userId: a.userId, legacy: a.legacy };
+  if (!hub) return c.body(null, 404);
+  const allow = await hubs.allowListFor(fid, id);
+  if (!hubs.hubVisible(hub, caller, () => !!caller.userId && allow.has(caller.userId))) return c.body(null, 404);
+  return c.json(await hubs.getHubTree(fid, id));   // sections/blocks inherit hub visibility (gated above)
+});
+
+app.put("/families/:fid/hubs/:id", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  if (!HUB_ID.test(id)) return c.json({ type: "validation", issues: [{ path: ["id"], message: "hub id must be [A-Za-z0-9_-]{1,128}" }] }, 422);
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!(await requireScope(a.cred.id, `hub:${id}`, "write"))) return c.json({ type: "forbidden" }, 403);
+  const raw = await c.req.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
+  // visibility + allow-list authoring (outside the strict hub schema).
+  if (raw.visibility !== undefined && raw.visibility !== "family" && raw.visibility !== "restricted")
+    return c.json({ type: "validation", issues: [{ path: ["visibility"], message: "family|restricted" }] }, 422);
+  const visibility = raw.visibility === "restricted" ? "restricted" : "family";
+  let audience: string[] | undefined;
+  if (visibility === "restricted") {
+    if (raw.audience !== undefined && (!Array.isArray(raw.audience) || raw.audience.some((x: any) => typeof x !== "string")))
+      return c.json({ type: "validation", issues: [{ path: ["audience"], message: "string[] of user ids" }] }, 422);
+    audience = Array.isArray(raw.audience) ? raw.audience : [];
+  }
+  const { visibility: _v, audience: _a, ...rest } = raw;
+  const parsed = HubSchema.safeParse({ ...rest, id });
+  if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  const caller = { userId: a.userId, legacy: a.legacy };
+  // ADR 0030 §6: only the author / an already-permitted member / legacy may rewrite
+  // an existing hub's visibility. A fresh hub's author is the caller → allowed.
+  const existing = await hubs.getHub(fid, id);
+  if (existing && !caller.legacy && existing.created_by && existing.created_by !== caller.userId) {
+    const allow = await hubs.allowListFor(fid, id);
+    if (!(caller.userId && allow.has(caller.userId))) return c.json({ type: "forbidden" }, 403);
+  }
+  return c.json(await hubs.upsertHub(fid, id, parsed.data, caller, visibility, audience), 200);
+});
+
+app.post("/families/:fid/hubs/:id/archive", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!(await requireScope(a.cred.id, `hub:${id}`, "write"))) return c.json({ type: "forbidden" }, 403);
+  return c.body(null, (await hubs.archiveHub(fid, id)) ? 204 : 404);
+});
+
+app.delete("/families/:fid/hubs/:id", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!(await requireScope(a.cred.id, `hub:${id}`, "write"))) return c.json({ type: "forbidden" }, 403);
+  return c.body(null, (await hubs.softDeleteHub(fid, id)) ? 204 : 404);
+});
+
+app.put("/families/:fid/sections/:id", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  const raw = await c.req.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
+  const hubId = typeof raw.hubId === "string" ? raw.hubId : null;
+  if (!hubId) return c.json({ type: "validation", issues: [{ path: ["hubId"], message: "required" }] }, 422);
+  if (!(await requireScope(a.cred.id, `hub:${hubId}`, "write"))) return c.json({ type: "forbidden" }, 403);
+  const { hubId: _h, ...rest } = raw;
+  const parsed = SectionSchema.safeParse({ ...rest, id });
+  if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  const row = await hubs.upsertSection(fid, id, hubId, parsed.data);
+  return row ? c.json(row, 200) : c.json({ type: "conflict", detail: "parent hub missing or deleted" }, 409);
+});
+
+app.put("/families/:fid/blocks/:id", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  const raw = await c.req.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
+  const sectionId = typeof raw.sectionId === "string" ? raw.sectionId : null;
+  if (!sectionId) return c.json({ type: "validation", issues: [{ path: ["sectionId"], message: "required" }] }, 422);
+  // scope on the owning hub (resolved via the section); 409 if the section is gone.
+  const hubId = await hubs.liveHubOfSection(fid, sectionId);
+  if (!hubId) return c.json({ type: "conflict", detail: "parent section missing or deleted" }, 409);
+  if (!(await requireScope(a.cred.id, `hub:${hubId}`, "write"))) return c.json({ type: "forbidden" }, 403);
+  const { sectionId: _s, ...rest } = raw;
+  const body = stampProvenance(rest, a.cred.id);     // un-forgeable provenance
+  const parsed = BlockSchema.safeParse({ ...body, id });
+  if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  const row = await hubs.upsertBlock(fid, id, sectionId, parsed.data);
+  return row ? c.json(row, 200) : c.json({ type: "conflict", detail: "parent section missing or deleted" }, 409);
 });
 
 app.post("/device/authorize", async (c) => {
@@ -632,7 +770,7 @@ app.get("/families/:fid/sync", async (c) => {
   const fid = c.req.param("fid");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:read")) return c.json({ type: "forbidden" }, 403);
+  if (!(await requireScope(a.cred.id, "content", "read"))) return c.json({ type: "forbidden" }, 403);
   const cursor = c.req.query("since");
   let su: string | null = null, si: string | null = null;
   if (cursor) {
@@ -642,8 +780,16 @@ app.get("/families/:fid/sync", async (c) => {
     su = parts[0]; si = parts[1];
   }
   const rows = await repo.syncCards(fid, su, si);
-  const live = rows.filter((r: any) => !r.deleted_at);
-  const tombstones = rows.filter((r: any) => r.deleted_at).map((r: any) => ({ type: "card", id: r.id }));
+  // ADR 0030 (round-1 P0-1): visibility is applied to the PAYLOAD, but the cursor +
+  // has_more are computed from the RAW fetched keyset window — so a page that is
+  // entirely restricted-invisible still advances the cursor (no stall) and never
+  // discloses existence by count. A row not visible to the caller is emitted as a
+  // TOMBSTONE (so a card that flipped to restricted is dropped from the cache).
+  const caller = { userId: a.userId, legacy: a.legacy };
+  const live = rows.filter((r: any) => !r.deleted_at && cardVisible(r, caller));
+  const tombstones = rows
+    .filter((r: any) => r.deleted_at || !cardVisible(r, caller))
+    .map((r: any) => ({ type: "card", id: r.id }));
   const last = rows[rows.length - 1];
   // [F3] cursor carries the EXACT Postgres timestamptz string (db.ts type parser
   // returns it raw) — no JS Date ms-truncation, no skipped rows.

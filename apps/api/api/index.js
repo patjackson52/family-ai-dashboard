@@ -81,6 +81,45 @@ var init_tokens = __esm({
   }
 });
 
+// src/auth/scope.ts
+var scope_exports = {};
+__export(scope_exports, {
+  grantScopes: () => grantScopes,
+  grantedHubIds: () => grantedHubIds,
+  requireScope: () => requireScope,
+  resolveGrants: () => resolveGrants,
+  scopeAllows: () => scopeAllows
+});
+async function resolveGrants(credId2) {
+  const r = await q(`SELECT scope FROM credential_grants WHERE credential_id=$1`, [credId2]);
+  return r.rows.map((x) => x.scope);
+}
+function scopeAllows(grants, resource, action) {
+  if (grants.includes(`content:${action}`)) return true;
+  if (resource !== "content" && grants.includes(`${resource}:${action}`)) return true;
+  return false;
+}
+async function requireScope(credId2, resource, action) {
+  return scopeAllows(await resolveGrants(credId2), resource, action);
+}
+function grantedHubIds(grants, action) {
+  if (grants.includes(`content:${action}`)) return null;
+  const prefix = "hub:", suffix = `:${action}`;
+  return grants.filter((g) => g.startsWith(prefix) && g.endsWith(suffix) && g.length > prefix.length + suffix.length).map((g) => g.slice(prefix.length, g.length - suffix.length));
+}
+async function grantScopes(credId2, scopes, client) {
+  const exec = client ? (t, p) => client.query(t, p) : (t, p) => q(t, p);
+  for (const s of scopes) {
+    await exec(`INSERT INTO credential_grants(credential_id, scope) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [credId2, s]);
+  }
+}
+var init_scope = __esm({
+  "src/auth/scope.ts"() {
+    "use strict";
+    init_db();
+  }
+});
+
 // src/auth/identity.ts
 var identity_exports = {};
 __export(identity_exports, {
@@ -142,6 +181,8 @@ async function mintCredentialFor(userId) {
     `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write}')`,
     [credentialId, userId]
   );
+  const { grantScopes: grantScopes2 } = await Promise.resolve().then(() => (init_scope(), scope_exports));
+  await grantScopes2(credentialId, ["content:read", "content:write"]);
   return { credentialId };
 }
 var StubVerifier, FIREBASE_JWKS_URL, FirebaseVerifier, id;
@@ -483,6 +524,8 @@ async function redeem(device_code, mintAccess2, issueRefresh2) {
        VALUES ($1,$2,$3,'cli','{content:read,content:write}', 'dayfold-cli '||left(coalesce($4,''),64))`,
       [cid, user_id, family_id, origin_ua]
     );
+    const { grantScopes: grantScopes2 } = await Promise.resolve().then(() => (init_scope(), scope_exports));
+    await grantScopes2(cid, ["content:read", "content:write"], client);
     const refresh = await issueRefresh2(cid, client);
     await client.query(`UPDATE device_authorizations SET credential_id=$1 WHERE device_code=$2`, [cid, device_code]);
     await client.query("COMMIT");
@@ -863,15 +906,34 @@ function crossValidateCard(card) {
 
 // src/repo.ts
 init_db();
+
+// src/content/visibility.ts
+function cardVisible(row, caller) {
+  if (caller.legacy) return true;
+  if (!row.visibility || row.visibility === "family") return true;
+  return !!caller.userId && Array.isArray(row.audience) && row.audience.includes(caller.userId);
+}
+function cardVisibilityClause(caller, nextParamIndex) {
+  if (caller.legacy) return { sql: "", params: [] };
+  return {
+    sql: ` AND (visibility = 'family' OR ($${nextParamIndex} = ANY(audience)))`,
+    params: [caller.userId ?? "\0"]
+    // non-null sentinel; a real user id never equals it
+  };
+}
+
+// src/repo.ts
 var J = (v) => v == null ? null : JSON.stringify(v);
 var SYNC_LIMIT = 200;
 async function upsertCard(familyId, id3, b) {
+  const visibility = b.visibility === "restricted" ? "restricted" : "family";
+  const audience = visibility === "restricted" && Array.isArray(b.audience) ? b.audience : null;
   const r = await q(
     `INSERT INTO briefing_cards
        (id, family_id, kind, title, body_md, target_hub_id, target_section_id,
         target_block_id, provenance, triggers, actions, not_before, expires_at,
-        type, payload, privacy, hub_ref, related, related_kicker, version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,1)
+        type, payload, privacy, hub_ref, related, related_kicker, visibility, audience, version)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,1)
      ON CONFLICT (family_id, id) DO UPDATE SET
        kind=EXCLUDED.kind, title=EXCLUDED.title, body_md=EXCLUDED.body_md,
        target_hub_id=EXCLUDED.target_hub_id, target_section_id=EXCLUDED.target_section_id,
@@ -880,6 +942,7 @@ async function upsertCard(familyId, id3, b) {
        not_before=EXCLUDED.not_before, expires_at=EXCLUDED.expires_at,
        type=EXCLUDED.type, payload=EXCLUDED.payload, privacy=EXCLUDED.privacy,
        hub_ref=EXCLUDED.hub_ref, related=EXCLUDED.related, related_kicker=EXCLUDED.related_kicker,
+       visibility=EXCLUDED.visibility, audience=EXCLUDED.audience,
        version=briefing_cards.version + 1, deleted_at=NULL
      RETURNING *`,
     [
@@ -901,16 +964,19 @@ async function upsertCard(familyId, id3, b) {
       J(b.privacy),
       b.hubRef ?? null,
       J(b.related),
-      b.relatedKicker ?? null
+      b.relatedKicker ?? null,
+      visibility,
+      audience
     ]
   );
   return r.rows[0];
 }
-async function listCards(familyId) {
+async function listCards(familyId, caller) {
+  const vis = cardVisibilityClause(caller, 2);
   const r = await q(
-    `SELECT * FROM briefing_cards WHERE family_id=$1 AND deleted_at IS NULL
+    `SELECT * FROM briefing_cards WHERE family_id=$1 AND deleted_at IS NULL${vis.sql}
      ORDER BY not_before NULLS LAST, id`,
-    [familyId]
+    [familyId, ...vis.params]
   );
   return r.rows;
 }
@@ -977,6 +1043,181 @@ async function authorizeTenant(c, fid) {
 }
 
 // src/app.ts
+init_scope();
+
+// src/content/hubs.ts
+init_db();
+var J2 = (v) => v == null ? null : JSON.stringify(v);
+function hubVisible(row, caller, allowListHas = () => false) {
+  if (caller.legacy) return true;
+  if (!row.visibility || row.visibility === "family") return true;
+  if (caller.userId && row.created_by && caller.userId === row.created_by) return true;
+  return !!caller.userId && !!row.id && allowListHas(row.id);
+}
+function hubVisibilityClause(caller, p) {
+  if (caller.legacy) return { sql: "", params: [] };
+  return {
+    sql: ` AND (visibility='family' OR created_by=$${p}
+              OR EXISTS (SELECT 1 FROM resource_visibility rv
+                          WHERE rv.family_id=hubs.family_id AND rv.hub_id=hubs.id AND rv.user_id=$${p}))`,
+    params: [caller.userId ?? "\0"]
+  };
+}
+async function listHubs(familyId, caller, grantedHubIds2) {
+  const vis = hubVisibilityClause(caller, 2);
+  const params = [familyId, ...vis.params];
+  let grantSql = "";
+  if (grantedHubIds2 !== null) {
+    grantSql = ` AND id = ANY($${params.length + 1})`;
+    params.push(grantedHubIds2);
+  }
+  const r = await q(
+    `SELECT * FROM hubs WHERE family_id=$1 AND deleted_at IS NULL${vis.sql}${grantSql}
+      ORDER BY coalesce(start_at, created_at), id`,
+    params
+  );
+  return r.rows;
+}
+async function getHub(familyId, id3) {
+  const r = await q(`SELECT * FROM hubs WHERE family_id=$1 AND id=$2 AND deleted_at IS NULL`, [familyId, id3]);
+  return r.rows[0] ?? null;
+}
+async function allowListFor(familyId, hubId) {
+  const r = await q(`SELECT user_id FROM resource_visibility WHERE family_id=$1 AND hub_id=$2`, [familyId, hubId]);
+  return new Set(r.rows.map((x) => x.user_id));
+}
+async function upsertHub(familyId, id3, b, caller, visibility, audience) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const r = await client.query(
+      `INSERT INTO hubs (id, family_id, type, title, status, start_at, end_at, countdown_to, visibility, created_by, version)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1)
+       ON CONFLICT (family_id, id) DO UPDATE SET
+         type=EXCLUDED.type, title=EXCLUDED.title, status=EXCLUDED.status,
+         start_at=EXCLUDED.start_at, end_at=EXCLUDED.end_at, countdown_to=EXCLUDED.countdown_to,
+         visibility=EXCLUDED.visibility, created_by=COALESCE(hubs.created_by, EXCLUDED.created_by),
+         version=hubs.version + 1, deleted_at=NULL
+       RETURNING *`,
+      [
+        id3,
+        familyId,
+        b.type,
+        b.title,
+        b.status ?? "active",
+        b.start_at ?? null,
+        b.end_at ?? null,
+        b.countdown_to ?? null,
+        visibility,
+        caller.userId
+      ]
+    );
+    await client.query(`DELETE FROM resource_visibility WHERE family_id=$1 AND hub_id=$2`, [familyId, id3]);
+    if (visibility === "restricted") {
+      for (const uid of audience ?? [])
+        await client.query(`INSERT INTO resource_visibility(family_id,hub_id,user_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [familyId, id3, uid]);
+    }
+    await client.query("COMMIT");
+    return r.rows[0];
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+async function archiveHub(familyId, id3) {
+  const r = await q(`UPDATE hubs SET status='archived' WHERE family_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING id`, [familyId, id3]);
+  return (r.rowCount ?? 0) > 0;
+}
+async function softDeleteHub(familyId, id3) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const h = await client.query(`UPDATE hubs SET deleted_at=now() WHERE family_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING id`, [familyId, id3]);
+    if ((h.rowCount ?? 0) === 0) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await client.query(`UPDATE sections SET deleted_at=now() WHERE family_id=$1 AND hub_id=$2 AND deleted_at IS NULL`, [familyId, id3]);
+    await client.query(
+      `UPDATE blocks SET deleted_at=now()
+        WHERE family_id=$1 AND deleted_at IS NULL
+          AND section_id IN (SELECT id FROM sections WHERE family_id=$1 AND hub_id=$2)`,
+      [familyId, id3]
+    );
+    await client.query("COMMIT");
+    return true;
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+async function getHubTree(familyId, hubId) {
+  const hub = await getHub(familyId, hubId);
+  if (!hub) return null;
+  const sections = (await q(`SELECT * FROM sections WHERE family_id=$1 AND hub_id=$2 AND deleted_at IS NULL ORDER BY ord, id`, [familyId, hubId])).rows;
+  const blocks = (await q(
+    `SELECT * FROM blocks WHERE family_id=$1 AND deleted_at IS NULL
+       AND section_id IN (SELECT id FROM sections WHERE family_id=$1 AND hub_id=$2) ORDER BY ord, id`,
+    [familyId, hubId]
+  )).rows;
+  return { hub, sections, blocks };
+}
+async function liveHubOfSection(familyId, sectionId) {
+  const r = await q(
+    `SELECT s.hub_id FROM sections s JOIN hubs h ON h.family_id=s.family_id AND h.id=s.hub_id
+      WHERE s.family_id=$1 AND s.id=$2 AND s.deleted_at IS NULL AND h.deleted_at IS NULL`,
+    [familyId, sectionId]
+  );
+  return r.rows[0]?.hub_id ?? null;
+}
+async function upsertSection(familyId, id3, hubId, b) {
+  const live = await q(`SELECT 1 FROM hubs WHERE family_id=$1 AND id=$2 AND deleted_at IS NULL`, [familyId, hubId]);
+  if (live.rowCount === 0) return null;
+  const r = await q(
+    `INSERT INTO sections (id, family_id, hub_id, title, ord, version)
+     VALUES ($1,$2,$3,$4,$5,1)
+     ON CONFLICT (family_id, id) DO UPDATE SET
+       hub_id=EXCLUDED.hub_id, title=EXCLUDED.title, ord=EXCLUDED.ord,
+       version=sections.version + 1, deleted_at=NULL
+     RETURNING *`,
+    [id3, familyId, hubId, b.title ?? null, b.ord ?? 0]
+  );
+  return r.rows[0];
+}
+async function upsertBlock(familyId, id3, sectionId, b) {
+  const live = await q(`SELECT 1 FROM sections WHERE family_id=$1 AND id=$2 AND deleted_at IS NULL`, [familyId, sectionId]);
+  if (live.rowCount === 0) return null;
+  const r = await q(
+    `INSERT INTO blocks (id, family_id, section_id, type, payload, body_md, body_ref, provenance, triggers, actions, ord, version)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1)
+     ON CONFLICT (family_id, id) DO UPDATE SET
+       section_id=EXCLUDED.section_id, type=EXCLUDED.type, payload=EXCLUDED.payload,
+       body_md=EXCLUDED.body_md, body_ref=EXCLUDED.body_ref, provenance=EXCLUDED.provenance,
+       triggers=EXCLUDED.triggers, actions=EXCLUDED.actions, ord=EXCLUDED.ord,
+       version=blocks.version + 1, deleted_at=NULL
+     RETURNING *`,
+    [
+      id3,
+      familyId,
+      sectionId,
+      b.type,
+      J2(b.payload),
+      b.body_md ?? null,
+      b.body_ref ?? null,
+      J2(b.provenance),
+      J2(b.triggers),
+      J2(b.actions),
+      b.ord ?? 0
+    ]
+  );
+  return r.rows[0];
+}
+
+// src/app.ts
 var app = new Hono();
 app.get("/health", (c) => c.json({ ok: true, surface: "m0" }));
 function problem(c, status, type, detail) {
@@ -990,9 +1231,6 @@ app.use("*", bodyLimit({ maxSize: 1024 * 1024, onError: (c) => problem(c, 413, "
 function bearer2(c) {
   const h = c.req.header("authorization") || "";
   return h.startsWith("Bearer ") ? h.slice(7) : void 0;
-}
-function hasScope(a, scope) {
-  return a.scopes.includes(scope);
 }
 function devAuthAllowed(_c) {
   if (process.env.ENABLE_DEV_AUTH !== "1") return false;
@@ -1014,6 +1252,7 @@ app.post("/auth/dev-token", async (c) => {
     `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write}')`,
     [credentialId, userId]
   );
+  await grantScopes(credentialId, ["content:read", "content:write"]);
   const { mintAccess: mintAccess2 } = await Promise.resolve().then(() => (init_tokens(), tokens_exports));
   const { issueRefresh: issueRefresh2 } = await Promise.resolve().then(() => (init_refresh(), refresh_exports));
   const access = await mintAccess2({ sub: userId, cid: credentialId });
@@ -1286,23 +1525,33 @@ app.put("/families/:fid/cards/:id", async (c) => {
   const fid = c.req.param("fid"), id3 = c.req.param("id");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:write")) return c.json({ type: "forbidden" }, 403);
+  if (!await requireScope(a.cred.id, "content", "write")) return c.json({ type: "forbidden" }, 403);
   const raw = await c.req.json().catch(() => null);
   if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
-  let body = stripServerManaged(raw);
+  if (raw.visibility !== void 0 && raw.visibility !== "family" && raw.visibility !== "restricted")
+    return c.json({ type: "validation", issues: [{ path: ["visibility"], message: "family|restricted" }] }, 422);
+  const visibility = raw.visibility === "restricted" ? "restricted" : "family";
+  let audience;
+  if (visibility === "restricted") {
+    if (raw.audience !== void 0 && (!Array.isArray(raw.audience) || raw.audience.some((x) => typeof x !== "string")))
+      return c.json({ type: "validation", issues: [{ path: ["audience"], message: "string[] of user ids" }] }, 422);
+    audience = Array.isArray(raw.audience) ? raw.audience : [];
+  }
+  const { visibility: _v, audience: _a, ...rest } = raw;
+  let body = stripServerManaged(rest);
   body = stampProvenance(body, a.cred.id);
   const parsed = BriefingCardSchema.safeParse({ ...body, id: id3 });
   if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
   const cross = crossValidateCard(parsed.data);
   if (cross.length) return c.json({ type: "validation", issues: cross }, 422);
-  return c.json(await upsertCard(fid, id3, parsed.data), 200);
+  return c.json(await upsertCard(fid, id3, { ...parsed.data, visibility, audience }), 200);
 });
 app.get("/families/:fid/cards", async (c) => {
   const fid = c.req.param("fid");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:read")) return c.json({ type: "forbidden" }, 403);
-  return c.json(await listCards(fid));
+  if (!await requireScope(a.cred.id, "content", "read")) return c.json({ type: "forbidden" }, 403);
+  return c.json(await listCards(fid, { userId: a.userId, legacy: a.legacy }));
 });
 app.get("/families/:fid/members", async (c) => {
   const fid = c.req.param("fid");
@@ -1321,8 +1570,117 @@ app.delete("/families/:fid/cards/:id", async (c) => {
   const fid = c.req.param("fid"), id3 = c.req.param("id");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:write")) return c.json({ type: "forbidden" }, 403);
+  if (!await requireScope(a.cred.id, "content", "write")) return c.json({ type: "forbidden" }, 403);
   return c.body(null, await softDeleteCard(fid, id3) ? 204 : 404);
+});
+var HUB_ID = /^[A-Za-z0-9_-]{1,128}$/;
+app.get("/families/:fid/hubs", async (c) => {
+  const fid = c.req.param("fid");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  const grants = await resolveGrants(a.cred.id);
+  const hubGrantIds = grantedHubIds(grants, "read");
+  if (hubGrantIds !== null && hubGrantIds.length === 0) return c.json({ type: "forbidden" }, 403);
+  return c.json(await listHubs(fid, { userId: a.userId, legacy: a.legacy }, hubGrantIds));
+});
+app.get("/families/:fid/hubs/:id", async (c) => {
+  const fid = c.req.param("fid"), id3 = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!await requireScope(a.cred.id, `hub:${id3}`, "read")) return c.body(null, 404);
+  const hub = await getHub(fid, id3);
+  const caller = { userId: a.userId, legacy: a.legacy };
+  if (!hub) return c.body(null, 404);
+  const allow = await allowListFor(fid, id3);
+  if (!hubVisible(hub, caller, () => !!caller.userId && allow.has(caller.userId))) return c.body(null, 404);
+  return c.json(hub);
+});
+app.get("/families/:fid/hubs/:id/tree", async (c) => {
+  const fid = c.req.param("fid"), id3 = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!await requireScope(a.cred.id, `hub:${id3}`, "read")) return c.body(null, 404);
+  const hub = await getHub(fid, id3);
+  const caller = { userId: a.userId, legacy: a.legacy };
+  if (!hub) return c.body(null, 404);
+  const allow = await allowListFor(fid, id3);
+  if (!hubVisible(hub, caller, () => !!caller.userId && allow.has(caller.userId))) return c.body(null, 404);
+  return c.json(await getHubTree(fid, id3));
+});
+app.put("/families/:fid/hubs/:id", async (c) => {
+  const fid = c.req.param("fid"), id3 = c.req.param("id");
+  if (!HUB_ID.test(id3)) return c.json({ type: "validation", issues: [{ path: ["id"], message: "hub id must be [A-Za-z0-9_-]{1,128}" }] }, 422);
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!await requireScope(a.cred.id, `hub:${id3}`, "write")) return c.json({ type: "forbidden" }, 403);
+  const raw = await c.req.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
+  if (raw.visibility !== void 0 && raw.visibility !== "family" && raw.visibility !== "restricted")
+    return c.json({ type: "validation", issues: [{ path: ["visibility"], message: "family|restricted" }] }, 422);
+  const visibility = raw.visibility === "restricted" ? "restricted" : "family";
+  let audience;
+  if (visibility === "restricted") {
+    if (raw.audience !== void 0 && (!Array.isArray(raw.audience) || raw.audience.some((x) => typeof x !== "string")))
+      return c.json({ type: "validation", issues: [{ path: ["audience"], message: "string[] of user ids" }] }, 422);
+    audience = Array.isArray(raw.audience) ? raw.audience : [];
+  }
+  const { visibility: _v, audience: _a, ...rest } = raw;
+  const parsed = HubSchema.safeParse({ ...rest, id: id3 });
+  if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  const caller = { userId: a.userId, legacy: a.legacy };
+  const existing = await getHub(fid, id3);
+  if (existing && !caller.legacy && existing.created_by && existing.created_by !== caller.userId) {
+    const allow = await allowListFor(fid, id3);
+    if (!(caller.userId && allow.has(caller.userId))) return c.json({ type: "forbidden" }, 403);
+  }
+  return c.json(await upsertHub(fid, id3, parsed.data, caller, visibility, audience), 200);
+});
+app.post("/families/:fid/hubs/:id/archive", async (c) => {
+  const fid = c.req.param("fid"), id3 = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!await requireScope(a.cred.id, `hub:${id3}`, "write")) return c.json({ type: "forbidden" }, 403);
+  return c.body(null, await archiveHub(fid, id3) ? 204 : 404);
+});
+app.delete("/families/:fid/hubs/:id", async (c) => {
+  const fid = c.req.param("fid"), id3 = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  if (!await requireScope(a.cred.id, `hub:${id3}`, "write")) return c.json({ type: "forbidden" }, 403);
+  return c.body(null, await softDeleteHub(fid, id3) ? 204 : 404);
+});
+app.put("/families/:fid/sections/:id", async (c) => {
+  const fid = c.req.param("fid"), id3 = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  const raw = await c.req.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
+  const hubId = typeof raw.hubId === "string" ? raw.hubId : null;
+  if (!hubId) return c.json({ type: "validation", issues: [{ path: ["hubId"], message: "required" }] }, 422);
+  if (!await requireScope(a.cred.id, `hub:${hubId}`, "write")) return c.json({ type: "forbidden" }, 403);
+  const { hubId: _h, ...rest } = raw;
+  const parsed = SectionSchema.safeParse({ ...rest, id: id3 });
+  if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  const row = await upsertSection(fid, id3, hubId, parsed.data);
+  return row ? c.json(row, 200) : c.json({ type: "conflict", detail: "parent hub missing or deleted" }, 409);
+});
+app.put("/families/:fid/blocks/:id", async (c) => {
+  const fid = c.req.param("fid"), id3 = c.req.param("id");
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  const raw = await c.req.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return c.json({ type: "bad-json" }, 400);
+  const sectionId = typeof raw.sectionId === "string" ? raw.sectionId : null;
+  if (!sectionId) return c.json({ type: "validation", issues: [{ path: ["sectionId"], message: "required" }] }, 422);
+  const hubId = await liveHubOfSection(fid, sectionId);
+  if (!hubId) return c.json({ type: "conflict", detail: "parent section missing or deleted" }, 409);
+  if (!await requireScope(a.cred.id, `hub:${hubId}`, "write")) return c.json({ type: "forbidden" }, 403);
+  const { sectionId: _s, ...rest } = raw;
+  const body = stampProvenance(rest, a.cred.id);
+  const parsed = BlockSchema.safeParse({ ...body, id: id3 });
+  if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  const row = await upsertBlock(fid, id3, sectionId, parsed.data);
+  return row ? c.json(row, 200) : c.json({ type: "conflict", detail: "parent section missing or deleted" }, 409);
 });
 app.post("/device/authorize", async (c) => {
   const { clientIp: clientIp2, hit: hit2 } = await Promise.resolve().then(() => (init_ratelimit(), ratelimit_exports));
@@ -1596,7 +1954,7 @@ app.get("/families/:fid/sync", async (c) => {
   const fid = c.req.param("fid");
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
-  if (!hasScope(a, "content:read")) return c.json({ type: "forbidden" }, 403);
+  if (!await requireScope(a.cred.id, "content", "read")) return c.json({ type: "forbidden" }, 403);
   const cursor = c.req.query("since");
   let su = null, si = null;
   if (cursor) {
@@ -1606,8 +1964,9 @@ app.get("/families/:fid/sync", async (c) => {
     si = parts[1];
   }
   const rows = await syncCards(fid, su, si);
-  const live = rows.filter((r) => !r.deleted_at);
-  const tombstones = rows.filter((r) => r.deleted_at).map((r) => ({ type: "card", id: r.id }));
+  const caller = { userId: a.userId, legacy: a.legacy };
+  const live = rows.filter((r) => !r.deleted_at && cardVisible(r, caller));
+  const tombstones = rows.filter((r) => r.deleted_at || !cardVisible(r, caller)).map((r) => ({ type: "card", id: r.id }));
   const last = rows[rows.length - 1];
   const next = last ? Buffer.from(`${last.updated_at}|${last.id}`).toString("base64") : cursor;
   return c.json({ changes: { cards: live }, tombstones, next_cursor: next, has_more: rows.length >= SYNC_LIMIT });
