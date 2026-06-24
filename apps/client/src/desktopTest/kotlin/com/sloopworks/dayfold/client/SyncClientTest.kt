@@ -38,6 +38,16 @@ class SyncClientTest {
     assertFailsWith<Exception> { client(engine).fetchPage(null) }
   }
 
+  @Test fun `fetchPage parses hubs and hub tombstones`() = runBlocking {
+    val engine = MockEngine { respond(
+      """{"changes":{"cards":[],"hubs":[{"id":"h1","type":"event","title":"Party","status":"active","updated_at":"t1"}]},
+          "tombstones":[{"type":"hub","id":"h2"}],"next_cursor":"abc","has_more":false}""",
+      HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
+    val r = client(engine).fetchPage(null)
+    assertEquals("h1", r.changes.hubs.single().id)
+    assertEquals(Tombstone("hub", "h2"), r.tombstones.single())
+  }
+
   @Test fun `fetchPage stays idle (empty page, no request) before sign-in`() = runBlocking {
     var hit = false
     val engine = MockEngine { hit = true; respond("", HttpStatusCode.OK) }

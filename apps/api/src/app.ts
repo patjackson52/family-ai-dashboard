@@ -806,28 +806,83 @@ app.get("/families/:fid/sync", async (c) => {
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
   if (!(await requireScope(a.cred.id, "content", "read"))) return c.json({ type: "forbidden" }, 403);
-  const cursor = c.req.query("since");
-  let su: string | null = null, si: string | null = null;
-  if (cursor) {
-    // [F4] validate the cursor; malformed → 400 (not a silent full-table re-scan).
-    const parts = Buffer.from(cursor, "base64").toString().split("|");
-    if (parts.length !== 2 || Number.isNaN(Date.parse(parts[0]))) return problem(c, 400, "bad-cursor");
-    su = parts[0]; si = parts[1];
+  const caller = { userId: a.userId, legacy: a.legacy };
+  const raw = c.req.query("since") ?? "";
+
+  // [F4] cursor decode:
+  //   3-part base64(updated_at|type|id), type ∈ {card,hub}, valid ts → merged mode (resume)
+  //   2-part base64(updated_at|id), valid ts → full merged resync from -∞
+  //     (old clients sent cards-only 2-part cursors; promote to merged so they are never
+  //      pinned in cards-only mode — fixes sticky-cards-only bug in Hub-Sync PR1)
+  //   Genuinely malformed (wrong part count other than 2/3, unparseable/NaN timestamp,
+  //     unknown type in 3-part) → 400 (not a silent rescan).
+  let su = "", st = "", si = "";
+  if (raw) {
+    const parts = Buffer.from(raw, "base64").toString().split("|");
+    if (parts.length === 2) {
+      // 2-part legacy cursor: validate timestamp, then fall through to merged mode from -∞.
+      // Accept "-infinity" (Postgres timestamptz literal) as a valid start marker.
+      const validTs = parts[0] === "-infinity" || !Number.isNaN(Date.parse(parts[0]));
+      if (!validTs) return problem(c, 400, "bad-cursor");
+      // su/st/si stay "" → merged keyset scans from beginning, returns cards + hubs.
+    } else if (parts.length === 3) {
+      // 3-part merged cursor: validate ts + type. Unknown type → full resync (not an error).
+      const validTs = !Number.isNaN(Date.parse(parts[0]));
+      if (!validTs) return problem(c, 400, "bad-cursor");
+      if (["card", "hub"].includes(parts[1])) {
+        [su, st, si] = parts;
+      }
+      // else: unknown type → su/st/si stay "" → full resync
+    } else {
+      // Wrong part count → malformed.
+      return problem(c, 400, "bad-cursor");
+    }
   }
-  const rows = await repo.syncCards(fid, su, si);
+
+  const rows = await repo.syncContent(fid, su, st, si);
+
   // ADR 0030 (round-1 P0-1): visibility is applied to the PAYLOAD, but the cursor +
   // has_more are computed from the RAW fetched keyset window — so a page that is
   // entirely restricted-invisible still advances the cursor (no stall) and never
   // discloses existence by count. A row not visible to the caller is emitted as a
-  // TOMBSTONE (so a card that flipped to restricted is dropped from the cache).
-  const caller = { userId: a.userId, legacy: a.legacy };
-  const live = rows.filter((r: any) => !r.deleted_at && cardVisible(r, caller));
-  const tombstones = rows
-    .filter((r: any) => r.deleted_at || !cardVisible(r, caller))
-    .map((r: any) => ({ type: "card", id: r.id }));
+  // TOMBSTONE (so a card/hub that flipped to restricted is dropped from the cache).
+
+  // Prefetch allow-lists for restricted hubs on this page in a single query.
+  const restrictedHubIds = rows
+    .filter((r: any) => r.type === "hub" && r.payload?.visibility === "restricted" && !r.deleted_at)
+    .map((r: any) => r.id);
+  const allowSets = new Map<string, Set<string>>();
+  if (restrictedHubIds.length > 0) {
+    const { q: dbq } = await import("./db.ts");
+    const rv = await dbq(
+      `SELECT hub_id, user_id FROM resource_visibility WHERE family_id=$1 AND hub_id = ANY($2)`,
+      [fid, restrictedHubIds],
+    );
+    for (const row of rv.rows) {
+      if (!allowSets.has(row.hub_id)) allowSets.set(row.hub_id, new Set());
+      allowSets.get(row.hub_id)!.add(row.user_id);
+    }
+  }
+
+  const changes = { cards: [] as any[], hubs: [] as any[] };
+  const tombstones: { type: string; id: string }[] = [];
+  for (const r of rows) {
+    const visible = r.deleted_at ? false
+      : r.type === "card"
+        ? cardVisible(r.payload, caller)
+        : hubs.hubVisible(r.payload, caller, (hid) => !!(caller.userId && allowSets.get(hid)?.has(caller.userId)));
+    if (visible) {
+      if (r.type === "card") changes.cards.push(r.payload);
+      else changes.hubs.push(r.payload);
+    } else {
+      tombstones.push({ type: r.type, id: r.id });
+    }
+  }
+
   const last = rows[rows.length - 1];
-  // [F3] cursor carries the EXACT Postgres timestamptz string (db.ts type parser
-  // returns it raw) — no JS Date ms-truncation, no skipped rows.
-  const next = last ? Buffer.from(`${last.updated_at}|${last.id}`).toString("base64") : cursor;
-  return c.json({ changes: { cards: live }, tombstones, next_cursor: next, has_more: rows.length >= repo.SYNC_LIMIT });
+  // [F3] cursor carries the EXACT Postgres timestamptz string — no JS Date ms-truncation.
+  const next_cursor = last
+    ? Buffer.from(`${last.updated_at}|${last.type}|${last.id}`).toString("base64")
+    : raw;
+  return c.json({ changes, tombstones, next_cursor, has_more: rows.length >= repo.SYNC_LIMIT });
 });

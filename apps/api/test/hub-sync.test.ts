@@ -1,0 +1,136 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import { generateKeyPair, exportJWK } from "jose";
+const here = dirname(fileURLToPath(import.meta.url));
+process.env.DATABASE_URL ||= "postgres:///fad_test";
+process.env.AUTH_ISS = "https://fad.test/auth"; process.env.AUTH_AUD = "fad-api-test";
+process.env.ENABLE_DEV_AUTH = "1"; process.env.DEV_AUTH_SECRET = "dev"; delete process.env.VERCEL_ENV;
+const kp = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
+const priv = await exportJWK(kp.privateKey); priv.kid = "k1"; priv.alg = "EdDSA";
+process.env.AUTH_SIGNING_KEY = JSON.stringify(priv);
+const { pool, q } = await import("../src/db.ts");
+const { app } = await import("../src/app.ts");
+
+beforeAll(async () => {
+  await q(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
+  for (const m of ["0001_m0_init.sql","0002_auth.sql","0003_device_grant.sql","0004_refresh_grace.sql","0006_typed_content.sql","0007_related.sql","0008_credential_grants.sql","0009_visibility.sql"])
+    await q(readFileSync(resolve(here, "../migrations/"+m), "utf8"));
+});
+afterAll(async () => { await pool.end(); });
+
+const dev = { "content-type": "application/json", authorization: "Bearer dev" };
+async function ownerOf(uid: string) {
+  const t = (await (await app.request("/auth/dev-token", { method: "POST", headers: dev, body: JSON.stringify({ provider: "dev", provider_uid: uid }) })).json()).access;
+  const fam = await (await app.request("/families", { method: "POST", headers: { ...dev, authorization: `Bearer ${t}` }, body: JSON.stringify({ name: uid }) })).json();
+  const me = await (await app.request("/auth/me", { headers: { authorization: `Bearer ${t}` } })).json();
+  return { token: t as string, familyId: fam.familyId as string, userId: me.user_id as string };
+}
+async function memberOf(uid: string, familyId: string) {
+  const t = (await (await app.request("/auth/dev-token", { method: "POST", headers: dev, body: JSON.stringify({ provider: "dev", provider_uid: uid }) })).json()).access;
+  const me = await (await app.request("/auth/me", { headers: { authorization: `Bearer ${t}` } })).json();
+  await q(`INSERT INTO memberships(user_id,family_id,role,status) VALUES ($1,$2,'adult','active')`, [me.user_id, familyId]);
+  return { token: t as string, userId: me.user_id as string };
+}
+const authH = (tok: string) => ({ "content-type": "application/json", authorization: `Bearer ${tok}` });
+const putCard = (fid: string, id: string, tok: string, body: any) =>
+  app.request(`/families/${fid}/cards/${id}`, { method: "PUT", headers: authH(tok), body: JSON.stringify(body) });
+const putHub = (fid: string, id: string, tok: string, body: any) =>
+  app.request(`/families/${fid}/hubs/${id}`, { method: "PUT", headers: authH(tok), body: JSON.stringify(body) });
+const baseCard = (over: any = {}) => ({ kind: "info", title: "x", provenance: { source: "cli", at: "2026-06-18T10:00:00Z" }, ...over });
+
+describe("hub-sync: merged keyset /sync (cards + hubs)", () => {
+  it("merged /sync streams cards + family hubs, omits a restricted hub, 3-part cursor", async () => {
+    const o = await ownerOf("hs-owner1");
+    const m = await memberOf("hs-member1", o.familyId);
+    const fid = o.familyId;
+
+    // seed two cards
+    await putCard(fid, "c1", o.token, baseCard({ title: "card one" }));
+    await putCard(fid, "c2", o.token, baseCard({ title: "card two" }));
+    // seed a family-visible hub
+    await putHub(fid, "hubFamily", o.token, { type: "party-event", title: "Family Hub" });
+    // seed a restricted hub: created_by = owner, member NOT in allow list
+    await putHub(fid, "hubRestricted", o.token, { type: "medical", title: "Restricted Hub", visibility: "restricted", audience: [o.userId] });
+
+    const res = await app.request(`/families/${fid}/sync`, { headers: { authorization: `Bearer ${m.token}` } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.changes.cards.map((c: any) => c.id).sort()).toEqual(["c1", "c2"]);
+    expect(body.changes.hubs.map((h: any) => h.id)).toContain("hubFamily");
+    expect(body.changes.hubs.map((h: any) => h.id)).not.toContain("hubRestricted"); // visibility-filtered
+    // restricted hub the member can't see → tombstone (so a stale cache drops it)
+    expect(body.tombstones).toContainEqual({ type: "hub", id: "hubRestricted" });
+    const [ts, type, id] = Buffer.from(body.next_cursor, "base64").toString().split("|");
+    expect(Date.parse(ts)).not.toBeNaN();
+    expect(type).toMatch(/^(card|hub)$/); expect(id).toBeTruthy();
+  });
+
+  it("revoking allow-list membership tombstones the hub on next sync", async () => {
+    const o = await ownerOf("hs-owner2");
+    const m = await memberOf("hs-member2", o.familyId);
+    const fid = o.familyId;
+
+    // hub restricted to BOTH owner + member
+    await putHub(fid, "hubShared", o.token, { type: "medical", title: "Shared Restricted", visibility: "restricted", audience: [o.userId, m.userId] });
+
+    // member can see it on first sync → get a cursor past it
+    const r1 = await app.request(`/families/${fid}/sync`, { headers: { authorization: `Bearer ${m.token}` } });
+    const b1 = await r1.json();
+    expect(b1.changes.hubs.map((h: any) => h.id)).toContain("hubShared");
+    const mCursor = b1.next_cursor;
+
+    // revoke member from allow list (trigger bumps hubs.updated_at)
+    await q(`DELETE FROM resource_visibility WHERE family_id=$1 AND hub_id=$2 AND user_id=$3`, [fid, "hubShared", m.userId]);
+
+    // re-sync from mCursor → hub re-surfaces as tombstone
+    const r2 = await app.request(`/families/${fid}/sync?since=${mCursor}`, { headers: { authorization: `Bearer ${m.token}` } });
+    const b2 = await r2.json();
+    expect(b2.tombstones).toContainEqual({ type: "hub", id: "hubShared" });
+  });
+
+  it("a legacy 2-part cursor promotes to merged mode (returns cards + hubs, 3-part next_cursor)", async () => {
+    const o = await ownerOf("hs-owner3");
+    const fid = o.familyId;
+    await putCard(fid, "legacyCard", o.token, baseCard({ title: "legacy" }));
+    await putHub(fid, "legacyHub", o.token, { type: "party-event", title: "legacy hub" });
+
+    // 2-part cursor = base64("-infinity|") — old device sending a cards-only cursor
+    const legacy = Buffer.from(`-infinity|`).toString("base64");
+    const res = await app.request(`/families/${fid}/sync?since=${legacy}`, { headers: { authorization: `Bearer ${o.token}` } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Must return BOTH cards AND hubs (merged mode, not stuck in cards-only)
+    expect(body.changes.cards.map((c: any) => c.id)).toContain("legacyCard");
+    expect(body.changes.hubs.map((h: any) => h.id)).toContain("legacyHub");
+    // next_cursor must be 3-part (merged) so future requests stay in merged mode
+    const parts = Buffer.from(body.next_cursor, "base64").toString().split("|");
+    expect(parts).toHaveLength(3);
+    expect(Date.parse(parts[0])).not.toBeNaN();
+    expect(parts[1]).toMatch(/^(card|hub)$/);
+    expect(parts[2]).toBeTruthy();
+  });
+
+  it("pages across card/hub type boundary at equal updated_at without skip/repeat", async () => {
+    const o = await ownerOf("hs-owner4");
+    const fid = o.familyId;
+
+    // Force a shared timestamp: update both to exact same time after creation
+    await putCard(fid, "pageCard", o.token, baseCard({ title: "page card" }));
+    await putHub(fid, "pageHub", o.token, { type: "party-event", title: "page hub" });
+    // pin them to the same updated_at
+    await q(`UPDATE briefing_cards SET updated_at='2020-01-01 00:00:00+00' WHERE family_id=$1 AND id='pageCard'`, [fid]);
+    await q(`UPDATE hubs SET updated_at='2020-01-01 00:00:00+00' WHERE family_id=$1 AND id='pageHub'`, [fid]);
+
+    // SYNC_LIMIT is 200 — do full sync from start; collect all items
+    const res = await app.request(`/families/${fid}/sync`, { headers: { authorization: `Bearer ${o.token}` } });
+    const body = await res.json();
+    const allCards = body.changes.cards.map((c: any) => c.id);
+    const allHubs = body.changes.hubs.map((h: any) => h.id);
+
+    // both items should appear exactly once
+    expect(allCards.filter((id: string) => id === "pageCard")).toHaveLength(1);
+    expect(allHubs.filter((id: string) => id === "pageHub")).toHaveLength(1);
+  });
+});

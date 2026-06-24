@@ -61,3 +61,31 @@ export async function syncCards(familyId: string, su: string | null, si: string 
     [familyId, su ?? "-infinity", si ?? "", limit]);
   return r.rows;
 }
+
+// Merged keyset over (updated_at, type, id) spanning cards + hubs. Row-wise
+// comparison so the tuple is globally unique. INCLUDES tombstones (deleted_at
+// not null) — soft-delete bumps updated_at so they surface past any cursor.
+// PR2 adds section/block UNION arms; today: card + hub only.
+export async function syncContent(
+  familyId: string,
+  su: string,   // start updated_at ("" → "-infinity")
+  st: string,   // start type ("" → "")
+  si: string,   // start id ("" → "")
+  limit = SYNC_LIMIT,
+) {
+  const r = await q(
+    `SELECT updated_at, type, id, family_id, deleted_at, payload FROM (
+       SELECT updated_at, 'card' AS type, id, family_id, deleted_at,
+              to_jsonb(briefing_cards.*) AS payload
+         FROM briefing_cards WHERE family_id=$1
+       UNION ALL
+       SELECT updated_at, 'hub' AS type, id, family_id, deleted_at,
+              to_jsonb(hubs.*) AS payload
+         FROM hubs WHERE family_id=$1
+     ) merged
+     WHERE (updated_at, type, id) > ($2::timestamptz, $3, $4)
+     ORDER BY updated_at, type, id LIMIT $5`,
+    [familyId, su === "" ? "-infinity" : su, st, si, limit],
+  );
+  return r.rows as { updated_at: string; type: string; id: string; family_id: string; deleted_at: string | null; payload: any }[];
+}

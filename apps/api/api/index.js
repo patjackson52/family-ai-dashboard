@@ -9,6 +9,11 @@ var __export = (target, all) => {
 };
 
 // src/db.ts
+var db_exports = {};
+__export(db_exports, {
+  pool: () => pool,
+  q: () => q
+});
 import pg from "pg";
 function q(text, params) {
   return pool.query(text, params);
@@ -1024,11 +1029,20 @@ async function softDeleteCard(familyId, id3) {
   );
   return (r.rowCount ?? 0) > 0;
 }
-async function syncCards(familyId, su, si, limit = SYNC_LIMIT) {
+async function syncContent(familyId, su, st, si, limit = SYNC_LIMIT) {
   const r = await q(
-    `SELECT * FROM briefing_cards WHERE family_id=$1 AND (updated_at, id) > ($2::timestamptz, $3)
-     ORDER BY updated_at, id LIMIT $4`,
-    [familyId, su ?? "-infinity", si ?? "", limit]
+    `SELECT updated_at, type, id, family_id, deleted_at, payload FROM (
+       SELECT updated_at, 'card' AS type, id, family_id, deleted_at,
+              to_jsonb(briefing_cards.*) AS payload
+         FROM briefing_cards WHERE family_id=$1
+       UNION ALL
+       SELECT updated_at, 'hub' AS type, id, family_id, deleted_at,
+              to_jsonb(hubs.*) AS payload
+         FROM hubs WHERE family_id=$1
+     ) merged
+     WHERE (updated_at, type, id) > ($2::timestamptz, $3, $4)
+     ORDER BY updated_at, type, id LIMIT $5`,
+    [familyId, su === "" ? "-infinity" : su, st, si, limit]
   );
   return r.rows;
 }
@@ -2030,21 +2044,52 @@ app.get("/families/:fid/sync", async (c) => {
   const a = await authorizeTenant(c, fid);
   if ("status" in a) return c.body(null, a.status);
   if (!await requireScope(a.cred.id, "content", "read")) return c.json({ type: "forbidden" }, 403);
-  const cursor = c.req.query("since");
-  let su = null, si = null;
-  if (cursor) {
-    const parts = Buffer.from(cursor, "base64").toString().split("|");
-    if (parts.length !== 2 || Number.isNaN(Date.parse(parts[0]))) return problem(c, 400, "bad-cursor");
-    su = parts[0];
-    si = parts[1];
-  }
-  const rows = await syncCards(fid, su, si);
   const caller = { userId: a.userId, legacy: a.legacy };
-  const live = rows.filter((r) => !r.deleted_at && cardVisible(r, caller));
-  const tombstones = rows.filter((r) => r.deleted_at || !cardVisible(r, caller)).map((r) => ({ type: "card", id: r.id }));
+  const raw = c.req.query("since") ?? "";
+  let su = "", st = "", si = "";
+  if (raw) {
+    const parts = Buffer.from(raw, "base64").toString().split("|");
+    if (parts.length === 2) {
+      const validTs = parts[0] === "-infinity" || !Number.isNaN(Date.parse(parts[0]));
+      if (!validTs) return problem(c, 400, "bad-cursor");
+    } else if (parts.length === 3) {
+      const validTs = !Number.isNaN(Date.parse(parts[0]));
+      if (!validTs) return problem(c, 400, "bad-cursor");
+      if (["card", "hub"].includes(parts[1])) {
+        [su, st, si] = parts;
+      }
+    } else {
+      return problem(c, 400, "bad-cursor");
+    }
+  }
+  const rows = await syncContent(fid, su, st, si);
+  const restrictedHubIds = rows.filter((r) => r.type === "hub" && r.payload?.visibility === "restricted" && !r.deleted_at).map((r) => r.id);
+  const allowSets = /* @__PURE__ */ new Map();
+  if (restrictedHubIds.length > 0) {
+    const { q: dbq } = await Promise.resolve().then(() => (init_db(), db_exports));
+    const rv = await dbq(
+      `SELECT hub_id, user_id FROM resource_visibility WHERE family_id=$1 AND hub_id = ANY($2)`,
+      [fid, restrictedHubIds]
+    );
+    for (const row of rv.rows) {
+      if (!allowSets.has(row.hub_id)) allowSets.set(row.hub_id, /* @__PURE__ */ new Set());
+      allowSets.get(row.hub_id).add(row.user_id);
+    }
+  }
+  const changes = { cards: [], hubs: [] };
+  const tombstones = [];
+  for (const r of rows) {
+    const visible = r.deleted_at ? false : r.type === "card" ? cardVisible(r.payload, caller) : hubVisible(r.payload, caller, (hid) => !!(caller.userId && allowSets.get(hid)?.has(caller.userId)));
+    if (visible) {
+      if (r.type === "card") changes.cards.push(r.payload);
+      else changes.hubs.push(r.payload);
+    } else {
+      tombstones.push({ type: r.type, id: r.id });
+    }
+  }
   const last = rows[rows.length - 1];
-  const next = last ? Buffer.from(`${last.updated_at}|${last.id}`).toString("base64") : cursor;
-  return c.json({ changes: { cards: live }, tombstones, next_cursor: next, has_more: rows.length >= SYNC_LIMIT });
+  const next_cursor = last ? Buffer.from(`${last.updated_at}|${last.type}|${last.id}`).toString("base64") : raw;
+  return c.json({ changes, tombstones, next_cursor, has_more: rows.length >= SYNC_LIMIT });
 });
 
 // src/vercel-entry.ts

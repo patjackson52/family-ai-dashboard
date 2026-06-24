@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
     // feed until Route.Feed (signed-in + active family) — sign in via the dev path
     // to reach the seeded feed.
     if (BuildConfig.DEBUG && BuildConfig.FAMILY_ID.isEmpty()) {
-      cs.applyDelta(com.sloopworks.dayfold.client.SampleData.cards, emptyList(), null, "2026-06-20T10:00:00Z")
+      cs.applyDelta(com.sloopworks.dayfold.client.SampleData.cards, emptyList(), emptyList(), null, "2026-06-20T10:00:00Z")
     }
     val tokenStore = AndroidTokenStore(applicationContext)
     authEngine = AuthEngine(
@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity() {
           onLookupDevice = { code -> lifecycleScope.launch { authEngine.lookupDevice(code) } },
           onApproveDevice = { fid -> lifecycleScope.launch { authEngine.approveDevice(fid, store.state.pendingDevice?.userCode ?: return@launch) } },
           onDenyDevice = { fid -> lifecycleScope.launch { authEngine.denyDevice(fid, store.state.pendingDevice?.userCode ?: return@launch) } },
-          onLoadHubs = { lifecycleScope.launch { hubEngine.loadHubs() } },
+          onLoadHubs = { lifecycleScope.launch { syncEngine.syncNow() } },  // PR1: hub list is DB-fed via the bridge
           onOpenHub = { id -> lifecycleScope.launch { hubEngine.openHub(id) } },
           onLoadAudience = { id -> lifecycleScope.launch { hubEngine.loadAudience(id) } },
         )

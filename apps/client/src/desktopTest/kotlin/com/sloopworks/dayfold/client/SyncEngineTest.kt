@@ -5,6 +5,10 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import kotlin.test.Test
@@ -28,7 +32,7 @@ class SyncEngineTest {
 
   @Test fun `cold start renders cached DB with zero network`() {
     val cs = freshStore()
-    cs.applyDelta(listOf(Card("cached", title = "Cached")), emptyList(), "c0", "2026-06-18T09:00:00Z")
+    cs.applyDelta(listOf(Card("cached", title = "Cached")), emptyList(), emptyList(), "c0", "2026-06-18T09:00:00Z")
     var hit = false
     val sc = syncClient(MockEngine { hit = true; respond("", HttpStatusCode.OK) })
     val store = createAppStore(debug = false)
@@ -61,7 +65,7 @@ class SyncEngineTest {
 
   @Test fun `tombstone removes from DB and store`() = runBlocking {
     val cs = freshStore()
-    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), "c0", "2026-06-18T09:00:00Z")
+    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), emptyList(), "c0", "2026-06-18T09:00:00Z")
     val sc = syncClient(MockEngine {
       respond("""{"changes":{"cards":[]},"tombstones":[{"type":"card","id":"a"}],"next_cursor":"c1","has_more":false}""",
         HttpStatusCode.OK)
@@ -77,7 +81,7 @@ class SyncEngineTest {
     val f = File.createTempFile("fad-sync", ".db").apply { delete(); deleteOnExit() }
     val url = "jdbc:sqlite:${f.absolutePath}"
     val d1 = JdbcSqliteDriver(url); val s1 = ContentStore.create(d1)
-    s1.applyDelta(listOf(Card("a", title = "A")), emptyList(), "cur42", "2026-06-18T10:00:00Z")
+    s1.applyDelta(listOf(Card("a", title = "A")), emptyList(), emptyList(), "cur42", "2026-06-18T10:00:00Z")
     d1.close()
     val d2 = JdbcSqliteDriver(url); val s2 = ContentStore(d2)   // reopen, no Schema.create
     assertEquals("cur42", s2.cursor())
@@ -99,7 +103,7 @@ class SyncEngineTest {
   // family content — the cache is wiped and the session signs out.
   @Test fun `tenancy revocation (403) wipes the local cache and signs out`() = runBlocking {
     val cs = freshStore()
-    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), "c0", "2026-06-18T09:00:00Z")
+    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), emptyList(), "c0", "2026-06-18T09:00:00Z")
     assertEquals(listOf("a"), cs.activeCards().map { it.id })   // cache populated
     val sc = syncClient(MockEngine { respond("forbidden", HttpStatusCode.Forbidden) })
     val store = createAppStore(debug = false)
@@ -112,7 +116,7 @@ class SyncEngineTest {
 
   @Test fun `non-member (404) also wipes the cache`() = runBlocking {
     val cs = freshStore()
-    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), "c0", "2026-06-18T09:00:00Z")
+    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), emptyList(), "c0", "2026-06-18T09:00:00Z")
     val sc = syncClient(MockEngine { respond("nope", HttpStatusCode.NotFound) })
     val store = createAppStore(debug = false)
     SyncEngine(store, cs, sc, nowProvider = { "t" }).syncNow()
@@ -121,11 +125,81 @@ class SyncEngineTest {
 
   @Test fun `a 401 does NOT wipe the cache (token problem, left to refresh)`() = runBlocking {
     val cs = freshStore()
-    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), "c0", "2026-06-18T09:00:00Z")
+    cs.applyDelta(listOf(Card("a", title = "A")), emptyList(), emptyList(), "c0", "2026-06-18T09:00:00Z")
     val sc = syncClient(MockEngine { respond("unauthorized", HttpStatusCode.Unauthorized) })
     val store = createAppStore(debug = false)
     SyncEngine(store, cs, sc, nowProvider = { "t" }).syncNow()
     assertEquals(listOf("a"), cs.activeCards().map { it.id })   // cache intact
     assertEquals("HTTP 401", store.state.error)
+  }
+
+  // ── Task 5 TDD: hub list is DB-fed via the SyncEngine bridge ──────────────────
+
+  // (a) syncNow writes hubs to the DB and the bridge surfaces HubsLoaded
+  @Test fun `syncNow writes hubs to the DB and the bridge surfaces HubsLoaded`(): Unit = runBlocking {
+    val cs = freshStore()
+    val appStore = createAppStore(debug = false)
+    val sc = syncClient(MockEngine {
+      respond(
+        """{"changes":{"cards":[],"hubs":[{"id":"h1","title":"Party","visibility":"family"}]},"tombstones":[],"next_cursor":"p1","has_more":false}""",
+        HttpStatusCode.OK
+      )
+    })
+    val e = SyncEngine(appStore, cs, sc, nowProvider = { "2026-06-18T10:00:00Z" })
+    e.start()
+    e.syncNow()
+    // Bridge surfaces HubsLoaded into the store (h1 in hubs list)
+    await(appStore) { it.hubs.map { h -> h.id } == listOf("h1") }
+    assertFalse(appStore.state.hubsBusy)
+  }
+
+  // (b) hub tombstone removes from the store + prunes currentHubId
+  @Test fun `hub tombstone removes from store and prunes currentHubId`(): Unit = runBlocking {
+    val cs = freshStore()
+    cs.applyDelta(emptyList(), listOf(Hub("h1", title = "Party")), emptyList(), "c0", "2026-06-18T09:00:00Z")
+    val appStore = createAppStore(debug = false)
+    val sc = syncClient(MockEngine {
+      respond(
+        """{"changes":{"cards":[],"hubs":[]},"tombstones":[{"type":"hub","id":"h1"}],"next_cursor":"c1","has_more":false}""",
+        HttpStatusCode.OK
+      )
+    })
+    val e = SyncEngine(appStore, cs, sc, nowProvider = { "2026-06-18T10:00:00Z" })
+    e.start()
+    // Let the bridge populate hubs first
+    await(appStore) { it.hubs.map { h -> h.id } == listOf("h1") }
+    // Simulate the user having opened hub h1
+    appStore.dispatch(OpenHub("h1"))
+    assertEquals("h1", appStore.state.currentHubId)
+    // Sync delivers the tombstone
+    e.syncNow()
+    // Bridge emits [] → reducer prunes currentHubId
+    await(appStore) { it.hubs.isEmpty() && it.currentHubId == null }
+  }
+
+  // (c) 403 wipes hubs too — bridge surfaces empty HubsLoaded + signs out
+  @Test fun `403 wipes hubs and the bridge surfaces empty HubsLoaded then signs out`(): Unit = runBlocking {
+    val cs = freshStore()
+    cs.applyDelta(
+      listOf(Card("a", title = "A")),
+      listOf(Hub("h1", title = "Party")),
+      emptyList(), "c0", "2026-06-18T09:00:00Z"
+    )
+    val appStore = createAppStore(debug = false)
+    val sc = syncClient(MockEngine { respond("forbidden", HttpStatusCode.Forbidden) })
+    val e = SyncEngine(appStore, cs, sc, nowProvider = { "t" })
+    e.start()
+    // Let the bridge emit the initial h1
+    await(appStore) { it.hubs.map { h -> h.id } == listOf("h1") }
+    // 403 → wipe() → bridge re-emits [] → SignedOut
+    e.syncNow()
+    await(appStore) { it.route == Route.SignIn && it.hubs.isEmpty() }
+    // DB hub table must be empty (the flow is now empty)
+    var dbHubs: List<Hub> = emptyList()
+    val job = GlobalScope.launch {
+      cs.activeHubsFlow().collect { dbHubs = it; throw CancellationException() }
+    }
+    delay(200); job.cancel()
+    assertTrue(dbHubs.isEmpty())
   }
 }
