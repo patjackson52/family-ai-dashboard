@@ -193,7 +193,7 @@ private fun HubsHost(store: Store<AppState>, state: AppState, onLoadHubs: () -> 
         onOpenAudience = { state.currentHubId?.let { store.dispatch(OpenAudienceSheet); onLoadAudience(it) } },
       )
     } else {
-      HubListScreen(state, onOpenHub = onOpenHub, onNow = { store.dispatch(OpenFeed) })
+      HubListScreen(state, onOpenHub = onOpenHub, onNow = { store.dispatch(OpenFeed) }, onFilter = { store.dispatch(SetHubFilter(it)) })
     }
     if (state.audienceSheetOpen) WhoCanSeeSheet(state, onClose = { store.dispatch(CloseAudienceSheet) })  // overlay
   }

@@ -2,7 +2,9 @@ package com.sloopworks.dayfold.client
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
@@ -18,6 +20,17 @@ class HubScreenTest {
     onNodeWithText("Maya's birthday").assertIsDisplayed()
     onNodeWithText("Dad's surgery").assertIsDisplayed()
     onNodeWithText("Private").assertIsDisplayed()                 // ADR 0030 restricted marker
+  }
+
+  @Test fun listFilterShowsOnlyTheSelectedStatus() = runComposeUiTest {
+    val hubs = listOf(
+      Hub(id = "a", title = "Active Party", status = "active", visibility = "family"),
+      Hub(id = "p", title = "Planning Trip", status = "planning", visibility = "family"),
+    )
+    // filter = planning → only the planning hub shows
+    setContent { MaterialTheme { HubListScreen(AppState(hubs = hubs, hubFilter = "planning")) } }
+    onNodeWithText("Planning Trip").assertIsDisplayed()
+    onAllNodesWithText("Active Party").assertCountEquals(0)
   }
 
   @Test fun detailRendersBlocksAndVisibilityChip() = runComposeUiTest {

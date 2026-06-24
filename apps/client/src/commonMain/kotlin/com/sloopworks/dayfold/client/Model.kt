@@ -295,6 +295,7 @@ data class AppState(
   val hubs: List<Hub> = emptyList(),
   val hubsBusy: Boolean = false,
   val hubError: String? = null,
+  val hubFilter: String = "all",                              // all | active | planning (list filter chips)
   val currentHubId: String? = null,
   val currentHubTree: HubTree? = null,
   // "Who can see this hub" sheet (ADR 0030). audienceSheetOpen drives the overlay;
@@ -325,6 +326,7 @@ data class OpenHub(val hubId: String) : Action                // list → detail
 data class HubTreeLoaded(val tree: HubTree) : Action
 data object HubNotFound : Action                              // 404 (restricted/absent) — back to list with a note
 data object CloseHub : Action                                 // detail → list
+data class SetHubFilter(val filter: String) : Action          // list filter chips (all|active|planning)
 data object OpenAudienceSheet : Action                        // visibility chip tap → sheet (busy, loads)
 data class HubAudienceLoaded(val audience: HubAudience) : Action
 data object CloseAudienceSheet : Action

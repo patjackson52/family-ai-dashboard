@@ -64,31 +64,64 @@ fun HubListScreen(
   state: AppState,
   onOpenHub: (String) -> Unit = {},
   onNow: () -> Unit = {},
+  onFilter: (String) -> Unit = {},
 ) {
+  val shown = state.hubs.filter { when (state.hubFilter) { "active" -> it.status == "active"; "planning" -> it.status == "planning"; else -> true } }
   Scaffold(
     topBar = { TopAppBar(title = { Text("Hubs", fontWeight = FontWeight.SemiBold) }) },
     bottomBar = { DayfoldBottomNav(hubsActive = true, onNow = onNow, onHubs = {}) },
   ) { pad ->
-    when {
-      state.hubs.isEmpty() && state.hubsBusy ->
-        Box(Modifier.fillMaxSize().padding(pad), Alignment.Center) { Text("Loading hubs…") }
-      state.hubs.isEmpty() ->
-        Box(Modifier.fillMaxSize().padding(pad), Alignment.Center) {
-          Text(
-            "When a big family event shows up — a trip, a move, a birthday — a hub appears here.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(40.dp),
-          )
+    Column(Modifier.fillMaxSize().padding(pad)) {
+      if (state.hubs.isNotEmpty()) {
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          FilterPill("All", state.hubFilter == "all") { onFilter("all") }
+          FilterPill("Active", state.hubFilter == "active") { onFilter("active") }
+          FilterPill("Planning", state.hubFilter == "planning") { onFilter("planning") }
         }
-      else -> LazyColumn(
-        Modifier.fillMaxSize().padding(pad),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-      ) {
-        items(state.hubs, key = { it.id }) { hub -> HubRow(hub, onClick = { onOpenHub(hub.id) }) }
+      }
+      when {
+        state.hubs.isEmpty() && state.hubsBusy ->
+          Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Loading hubs…") }
+        state.hubs.isEmpty() ->
+          Box(Modifier.fillMaxSize(), Alignment.Center) {
+            Text(
+              "When a big family event shows up — a trip, a move, a birthday — a hub appears here.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(40.dp),
+            )
+          }
+        shown.isEmpty() ->
+          Box(Modifier.fillMaxSize(), Alignment.Center) {
+            Text("No ${state.hubFilter} hubs.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        else -> LazyColumn(
+          Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(16.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+          items(shown, key = { it.id }) { hub -> HubRow(hub, onClick = { onOpenHub(hub.id) }) }
+        }
       }
     }
+  }
+}
+
+@Composable
+private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
+  Surface(
+    color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+    shape = RoundedCornerShape(9.dp),
+    modifier = Modifier.clickable(onClick = onClick)
+      .then(if (selected) Modifier else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(9.dp))),
+  ) {
+    Text(
+      label,
+      style = MaterialTheme.typography.labelLarge,
+      fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+      color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+      modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp),
+    )
   }
 }
 
