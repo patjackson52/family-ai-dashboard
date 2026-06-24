@@ -15,7 +15,7 @@ const { app } = await import("../src/app.ts");
 
 beforeAll(async () => {
   await q(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
-  for (const m of ["0001_m0_init.sql","0002_auth.sql","0003_device_grant.sql","0004_refresh_grace.sql","0006_typed_content.sql","0007_related.sql","0008_credential_grants.sql","0009_visibility.sql"])
+  for (const m of ["0001_m0_init.sql","0002_auth.sql","0003_device_grant.sql","0004_refresh_grace.sql","0006_typed_content.sql","0007_related.sql","0008_credential_grants.sql","0009_visibility.sql","0010_hub_sync_fanout.sql"])
     await q(readFileSync(resolve(here, "../migrations/"+m), "utf8"));
 });
 afterAll(async () => { await pool.end(); });
@@ -110,6 +110,160 @@ describe("hub-sync: merged keyset /sync (cards + hubs)", () => {
     expect(Date.parse(parts[0])).not.toBeNaN();
     expect(parts[1]).toMatch(/^(card|hub)$/);
     expect(parts[2]).toBeTruthy();
+  });
+
+  it("revoking allow-list membership bumps updated_at on hub AND its sections AND blocks (0010 subtree fanout)", async () => {
+    const o = await ownerOf("hs-fanout-owner");
+    const m = await memberOf("hs-fanout-member", o.familyId);
+    const fid = o.familyId;
+
+    // seed a restricted hub with a section and a block
+    await putHub(fid, "hubFanout", o.token, { type: "medical", title: "Fanout Hub", visibility: "restricted", audience: [o.userId, m.userId] });
+    await q(`INSERT INTO sections(id, family_id, hub_id, title) VALUES ('sec1', $1, 'hubFanout', 'Section 1')`, [fid]);
+    await q(`INSERT INTO blocks(id, family_id, section_id, type, provenance) VALUES ('blk1', $1, 'sec1', 'text', '{"source":"test"}')`, [fid]);
+
+    // capture current updated_at for hub, section, block
+    const before = await q(
+      `SELECT h.updated_at AS hub_ts, s.updated_at AS sec_ts, b.updated_at AS blk_ts
+       FROM hubs h
+       JOIN sections s ON s.family_id = h.family_id AND s.hub_id = h.id
+       JOIN blocks b   ON b.family_id = s.family_id AND b.section_id = s.id
+       WHERE h.family_id = $1 AND h.id = 'hubFanout'`,
+      [fid]
+    );
+    const { hub_ts: hubBefore, sec_ts: secBefore, blk_ts: blkBefore } = before.rows[0];
+
+    // small delay so now() advances past the captured timestamps
+    await new Promise(r => setTimeout(r, 20));
+
+    // revoke member from allow list — trigger fires
+    await q(`DELETE FROM resource_visibility WHERE family_id=$1 AND hub_id='hubFanout' AND user_id=$2`, [fid, m.userId]);
+
+    // assert all three updated_at values advanced
+    const after = await q(
+      `SELECT h.updated_at AS hub_ts, s.updated_at AS sec_ts, b.updated_at AS blk_ts
+       FROM hubs h
+       JOIN sections s ON s.family_id = h.family_id AND s.hub_id = h.id
+       JOIN blocks b   ON b.family_id = s.family_id AND b.section_id = s.id
+       WHERE h.family_id = $1 AND h.id = 'hubFanout'`,
+      [fid]
+    );
+    const { hub_ts: hubAfter, sec_ts: secAfter, blk_ts: blkAfter } = after.rows[0];
+
+    expect(new Date(hubAfter).getTime()).toBeGreaterThan(new Date(hubBefore).getTime());
+    expect(new Date(secAfter).getTime()).toBeGreaterThan(new Date(secBefore).getTime());
+    expect(new Date(blkAfter).getTime()).toBeGreaterThan(new Date(blkBefore).getTime());
+  });
+
+  // ── Task 10: sections + blocks streamed, gated by parent hub visibility ──
+
+  it("restricted hub's sections+blocks never reach a non-allow-listed member (live or otherwise)", async () => {
+    const o = await ownerOf("hs-sec-owner");
+    const outsider = await memberOf("hs-sec-outsider", o.familyId);
+    const fid = o.familyId;
+
+    // restricted hub: only owner is in the allow list
+    await putHub(fid, "hubRestrictedSec", o.token, {
+      type: "medical", title: "Restricted Hub with sec+blk",
+      visibility: "restricted", audience: [o.userId],
+    });
+    // insert section + block directly (bypassing route so we can use known ids)
+    await q(`INSERT INTO sections(id, family_id, hub_id, title) VALUES ('secOfRestricted', $1, 'hubRestrictedSec', 'Secret Section')`, [fid]);
+    await q(`INSERT INTO blocks(id, family_id, section_id, type, provenance) VALUES ('blkOfRestricted', $1, 'secOfRestricted', 'text', '{"source":"test"}')`, [fid]);
+
+    const res = await app.request(`/families/${fid}/sync`, { headers: { authorization: `Bearer ${outsider.token}` } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const ids = (body.changes.sections ?? []).map((s: any) => s.id)
+      .concat((body.changes.blocks ?? []).map((b: any) => b.id));
+    expect(ids).not.toContain("secOfRestricted");
+    expect(ids).not.toContain("blkOfRestricted");
+    // they should appear as tombstones (not live)
+    const tombIds = (body.tombstones ?? []).map((t: any) => t.id);
+    expect(tombIds).toContain("secOfRestricted");
+    expect(tombIds).toContain("blkOfRestricted");
+  });
+
+  it("allow-listed member receives sections+blocks of a restricted hub", async () => {
+    const o = await ownerOf("hs-sec-permitted-owner");
+    const m = await memberOf("hs-sec-permitted-member", o.familyId);
+    const fid = o.familyId;
+
+    await putHub(fid, "hubPermitted", o.token, {
+      type: "medical", title: "Permitted Hub",
+      visibility: "restricted", audience: [o.userId, m.userId],
+    });
+    await q(`INSERT INTO sections(id, family_id, hub_id, title) VALUES ('secPermitted', $1, 'hubPermitted', 'Permitted Section')`, [fid]);
+    await q(`INSERT INTO blocks(id, family_id, section_id, type, provenance) VALUES ('blkPermitted', $1, 'secPermitted', 'text', '{"source":"test"}')`, [fid]);
+
+    const res = await app.request(`/families/${fid}/sync`, { headers: { authorization: `Bearer ${m.token}` } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.changes.sections ?? []).toContainEqual(expect.objectContaining({ id: "secPermitted" }));
+    expect(body.changes.blocks ?? []).toContainEqual(expect.objectContaining({ id: "blkPermitted" }));
+  });
+
+  it("revoking allow-list membership tombstones hub + section + block on next sync", async () => {
+    const o = await ownerOf("hs-revoke-owner");
+    const m = await memberOf("hs-revoke-member", o.familyId);
+    const fid = o.familyId;
+
+    await putHub(fid, "hubRevoke", o.token, {
+      type: "medical", title: "Revoke Hub",
+      visibility: "restricted", audience: [o.userId, m.userId],
+    });
+    await q(`INSERT INTO sections(id, family_id, hub_id, title) VALUES ('secRevoke', $1, 'hubRevoke', 'Revoke Section')`, [fid]);
+    await q(`INSERT INTO blocks(id, family_id, section_id, type, provenance) VALUES ('blkRevoke', $1, 'secRevoke', 'text', '{"source":"test"}')`, [fid]);
+
+    // first sync: member sees them
+    const r1 = await app.request(`/families/${fid}/sync`, { headers: { authorization: `Bearer ${m.token}` } });
+    const b1 = await r1.json();
+    expect(b1.changes.sections ?? []).toContainEqual(expect.objectContaining({ id: "secRevoke" }));
+    const cursor = b1.next_cursor;
+
+    // revoke
+    await q(`DELETE FROM resource_visibility WHERE family_id=$1 AND hub_id='hubRevoke' AND user_id=$2`, [fid, m.userId]);
+
+    // second sync from cursor: hub + section + block tombstoned
+    const r2 = await app.request(`/families/${fid}/sync?since=${cursor}`, { headers: { authorization: `Bearer ${m.token}` } });
+    const b2 = await r2.json();
+    const tombIds = (b2.tombstones ?? []).map((t: any) => t.id);
+    expect(tombIds).toContain("hubRevoke");
+    expect(tombIds).toContain("secRevoke");
+    expect(tombIds).toContain("blkRevoke");
+  });
+
+  it("visible→invisible→visible flap re-emits section+block as live", async () => {
+    const o = await ownerOf("hs-flap-owner");
+    const m = await memberOf("hs-flap-member", o.familyId);
+    const fid = o.familyId;
+
+    await putHub(fid, "hubFlap", o.token, {
+      type: "medical", title: "Flap Hub",
+      visibility: "restricted", audience: [o.userId, m.userId],
+    });
+    await q(`INSERT INTO sections(id, family_id, hub_id, title) VALUES ('secFlap', $1, 'hubFlap', 'Flap Section')`, [fid]);
+    await q(`INSERT INTO blocks(id, family_id, section_id, type, provenance) VALUES ('blkFlap', $1, 'secFlap', 'text', '{"source":"test"}')`, [fid]);
+
+    // sync1: see them
+    const r1 = await app.request(`/families/${fid}/sync`, { headers: { authorization: `Bearer ${m.token}` } });
+    const b1 = await r1.json();
+    expect(b1.changes.sections ?? []).toContainEqual(expect.objectContaining({ id: "secFlap" }));
+    const cursor1 = b1.next_cursor;
+
+    // revoke → tombstone
+    await q(`DELETE FROM resource_visibility WHERE family_id=$1 AND hub_id='hubFlap' AND user_id=$2`, [fid, m.userId]);
+    const r2 = await app.request(`/families/${fid}/sync?since=${cursor1}`, { headers: { authorization: `Bearer ${m.token}` } });
+    const b2 = await r2.json();
+    const cursor2 = b2.next_cursor;
+    expect((b2.tombstones ?? []).map((t: any) => t.id)).toContain("secFlap");
+
+    // re-grant → live again
+    await q(`INSERT INTO resource_visibility(family_id, hub_id, user_id) VALUES ($1,'hubFlap',$2)`, [fid, m.userId]);
+    const r3 = await app.request(`/families/${fid}/sync?since=${cursor2}`, { headers: { authorization: `Bearer ${m.token}` } });
+    const b3 = await r3.json();
+    expect(b3.changes.sections ?? []).toContainEqual(expect.objectContaining({ id: "secFlap" }));
+    expect(b3.changes.blocks ?? []).toContainEqual(expect.objectContaining({ id: "blkFlap" }));
   });
 
   it("pages across card/hub type boundary at equal updated_at without skip/repeat", async () => {
