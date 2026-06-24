@@ -27,6 +27,17 @@ export async function requireScope(credId: string, resource: string, action: Act
   return scopeAllows(await resolveGrants(credId), resource, action);
 }
 
+// For a LIST: null = global `content:<action>` (all hubs); otherwise the explicit
+// set of hub ids the credential is resource-granted for (possibly empty = no
+// authority). Parsed structurally (no split(':')) so hub ids may contain ':'.
+export function grantedHubIds(grants: string[], action: Action): string[] | null {
+  if (grants.includes(`content:${action}`)) return null;
+  const prefix = "hub:", suffix = `:${action}`;
+  return grants
+    .filter((g) => g.startsWith(prefix) && g.endsWith(suffix) && g.length > prefix.length + suffix.length)
+    .map((g) => g.slice(prefix.length, g.length - suffix.length));
+}
+
 // Write grant rows at credential-mint time. Accepts an optional pg client so it can
 // run inside the device-redeem transaction. Idempotent.
 export async function grantScopes(
