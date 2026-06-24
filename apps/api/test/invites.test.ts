@@ -322,6 +322,20 @@ describe("approve / decline / revoke + GET /families/:fid/invites", () => {
     expect(pRow.requested_at).toBeDefined();
   });
 
+  it("a pending member with MULTIPLE identities appears exactly once (dedup, S4 follow-1)", async () => {
+    const o = await ownerOf("dedup-owner");
+    const inv = await mintInvite(o.token, o.familyId);
+    const invitee = await devToken("dedup-invitee");
+    await app.request("/invites:redeem", { method: "POST", headers: { ...dev, authorization: `Bearer ${invitee}` }, body: JSON.stringify({ token: inv.token }) });
+    const me = await (await app.request("/auth/me", { headers: { authorization: `Bearer ${invitee}` } })).json();
+    // a second identity for the SAME user (e.g. Google + Apple at S2) — a plain
+    // LEFT JOIN would fan this person into two pending rows.
+    await q(`INSERT INTO user_identities(id,user_id,provider,provider_uid) VALUES ($1,$2,'apple','apple-sub-dedup')`,
+      ["uid2_" + Math.random().toString(16).slice(2), me.user_id]);
+    const b = await (await app.request(`/families/${o.familyId}/invites`, { method: "GET", headers: { ...dev, authorization: `Bearer ${o.token}` } })).json();
+    expect(b.pending.filter((p: any) => p.uid === me.user_id).length).toBe(1);   // once, not twice
+  });
+
   it("concurrent approve: single-activates (exactly one 204, others 200 idempotent)", async () => {
     const o = await ownerOf("concurrent-approve-owner-1");
     const inv = await mintInvite(o.token, o.familyId);

@@ -1883,7 +1883,7 @@ app.post("/families/:fid/members/*", async (c) => {
     if (cur.rowCount === 0 || cur.rows[0].status !== "active") return c.body(null, 404);
     return c.body(null, 200);
   } else if (action === "approve") {
-    const r = await q(`UPDATE memberships SET status='active', joined_at=now() WHERE user_id=$1 AND family_id=$2 AND status='pending' RETURNING role`, [uid, fid]);
+    const r = await q(`UPDATE memberships SET status='active', joined_at=now() WHERE user_id=$1 AND family_id=$2 AND status='pending' RETURNING 1`, [uid, fid]);
     if (r.rowCount === 1) {
       (await Promise.resolve().then(() => (init_audit(), audit_exports))).audit("invite.approve", { actorUserId: g.sub, familyId: fid, detail: { uid } });
       return c.body(null, 204);
@@ -1945,7 +1945,10 @@ app.get("/families/:fid/invites", async (c) => {
     `SELECT m.user_id AS uid, u.display_name, ui.provider, ui.provider_uid, ui.email_verified,
             m.role, m.invite_id, m.created_at AS requested_at
        FROM memberships m JOIN users u ON u.id=m.user_id
-       LEFT JOIN user_identities ui ON ui.user_id=m.user_id
+       LEFT JOIN LATERAL (
+         SELECT provider, provider_uid, email_verified
+           FROM user_identities WHERE user_id=m.user_id ORDER BY created_at, id LIMIT 1
+       ) ui ON true
       WHERE m.family_id=$1 AND m.status='pending' ORDER BY m.created_at`,
     [fid]
   );

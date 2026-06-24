@@ -706,7 +706,7 @@ app.post("/families/:fid/members/*", async (c) => {
     if (cur.rowCount === 0 || cur.rows[0].status !== "active") return c.body(null, 404);
     return c.body(null, 200);   // already an owner
   } else if (action === "approve") {
-    const r = await q(`UPDATE memberships SET status='active', joined_at=now() WHERE user_id=$1 AND family_id=$2 AND status='pending' RETURNING role`, [uid, fid]);
+    const r = await q(`UPDATE memberships SET status='active', joined_at=now() WHERE user_id=$1 AND family_id=$2 AND status='pending' RETURNING 1`, [uid, fid]);  // role unused — only rowCount matters (S4 follow-2)
     if (r.rowCount === 1) { (await import("./auth/audit.ts")).audit("invite.approve", { actorUserId: g.sub, familyId: fid, detail:{ uid } }); return c.body(null, 204); }
     const cur = await q(`SELECT status FROM memberships WHERE user_id=$1 AND family_id=$2`, [uid, fid]);
     if (cur.rowCount === 0) return c.body(null, 404);
@@ -758,11 +758,17 @@ app.get("/families/:fid/invites", async (c) => {
   const fid = c.req.param("fid");
   const g = await ownerGate(c, fid); if ("status" in g) return c.body(null, g.status);
   const invites = await q(`SELECT id, role, mode, max_uses, used_count, expires_at, created_at FROM invites WHERE family_id=$1 AND status='active' AND expires_at>now() ORDER BY created_at DESC`, [fid]);
+  // ONE row per pending membership. A multi-identity user (e.g. Google + Apple at
+  // S2) would fan out across a plain LEFT JOIN — pick a single deterministic
+  // identity (earliest) via LATERAL so the approval queue shows each person once.
   const pending = await q(
     `SELECT m.user_id AS uid, u.display_name, ui.provider, ui.provider_uid, ui.email_verified,
             m.role, m.invite_id, m.created_at AS requested_at
        FROM memberships m JOIN users u ON u.id=m.user_id
-       LEFT JOIN user_identities ui ON ui.user_id=m.user_id
+       LEFT JOIN LATERAL (
+         SELECT provider, provider_uid, email_verified
+           FROM user_identities WHERE user_id=m.user_id ORDER BY created_at, id LIMIT 1
+       ) ui ON true
       WHERE m.family_id=$1 AND m.status='pending' ORDER BY m.created_at`, [fid]);
   return c.json({ invites: invites.rows, pending: pending.rows });        // [I4] identity in the queue
 });
