@@ -10,7 +10,7 @@ class HubTreeValidateTest {
   private fun bad(errs: List<String>, needle: String) =
     assertTrue(errs.any { it.contains(needle) }, "expected an error mentioning \"$needle\", got: $errs")
 
-  @Test fun `valid hub passes; bad type, status, missing title fail`() {
+  @Test fun `valid hub passes, bad type or status or missing title fail`() {
     ok(validateHubTree("hubs", """{"type":"party-event","title":"Maya's birthday","status":"planning"}"""))
     bad(validateHubTree("hubs", """{"type":"party-event"}"""), "title")
     bad(validateHubTree("hubs", """{"type":"birthday-bash","title":"x"}"""), "catalog key")
