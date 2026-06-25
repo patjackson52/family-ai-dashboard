@@ -91,6 +91,7 @@ internal fun cliVersion(): String =
 fun main(args: Array<String>) {
   when (args.getOrNull(0)) {
     "--version", "-v", "version" -> println("dayfold ${cliVersion()}")
+    "help", "-h", "--help" -> println(USAGE)   // explicit help → stdout, exit 0 (not an error)
 
     "login" -> deviceLogin(
       api = System.getenv("DAYFOLD_API") ?: "https://family-ai-dashboard.vercel.app",
@@ -323,18 +324,22 @@ private fun deviceLogin(api: String, allowEnvKey: Boolean) {
   System.err.println("login timed out — run `dayfold login` to try again."); exitProcess(1)
 }
 
+internal val USAGE =
+  "usage: dayfold <command>\n" +
+    "  login [--allow-env-key] | logout | whoami\n" +
+    "        (refresh token is stored in the OS keychain; --allow-env-key permits\n" +
+    "         a 0600-file fallback on hosts without a keychain — headless/CI)\n" +
+    "  push <id> <file.json> [--hub|--section|--block] [--type file|link|...]\n" +
+    "        (default: a briefing card; --hub/--section/--block author a hub tree.\n" +
+    "         --type runs local typed card validation before the server)\n" +
+    "  pull [--hub <id>]          read content back (cards+hubs, or one hub tree)\n" +
+    "  template <type>            starter body: a card type, or hub|section|block\n" +
+    "  version | --version       print the CLI version\n" +
+    "  help | -h | --help         print this usage"
+
+// Misuse → usage to stderr, exit 2. Explicit `help` prints to stdout + exits 0 (help
+// is not an error) — see the dispatch in main().
 private fun usage(): Nothing {
-  System.err.println(
-    "usage: dayfold <command>\n" +
-      "  login [--allow-env-key] | logout | whoami\n" +
-      "        (refresh token is stored in the OS keychain; --allow-env-key permits\n" +
-      "         a 0600-file fallback on hosts without a keychain — headless/CI)\n" +
-      "  push <id> <file.json> [--hub|--section|--block] [--type file|link|...]\n" +
-      "        (default: a briefing card; --hub/--section/--block author a hub tree.\n" +
-      "         --type runs local typed card validation before the server)\n" +
-      "  pull [--hub <id>]          read content back (cards+hubs, or one hub tree)\n" +
-      "  template <type>            starter body: a card type, or hub|section|block\n" +
-      "  version | --version       print the CLI version",
-  )
+  System.err.println(USAGE)
   exitProcess(2)
 }
