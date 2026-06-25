@@ -1,7 +1,9 @@
 package com.sloopworks.dayfold.cli
 
+import com.sloopworks.dayfold.schema.BlockType
 import com.sloopworks.dayfold.schema.BriefingCard
 import com.sloopworks.dayfold.schema.BriefingCardPayload
+import com.sloopworks.dayfold.schema.Status
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -57,9 +59,15 @@ fun validateCard(assertType: String?, json: String): List<String> {
   return errors
 }
 
+// The hub `type` is a free `string` server-side (ADR 0004/0006: "app-validated",
+// no generated enum) — the catalog lives only in the schema's describe() text, so
+// it stays hand-listed here. HUB_STATUS / BLOCK_TYPES, by contrast, ARE generated
+// enums in Content.kt (the schema package the CLI already sources) — derive them so
+// a schema change can't silently drift this pre-check into rejecting newly-valid
+// content (or accepting a since-removed value). They match the hand-list today.
 private val HUB_CATALOG = setOf("vacation", "starting-college", "move", "party-event", "new-baby", "medical", "school-year")
-private val HUB_STATUS = setOf("planning", "active", "archived")
-private val BLOCK_TYPES = setOf("text", "markdown", "link", "checklist", "document", "milestone", "contact", "location", "budget")
+private val HUB_STATUS = Status.entries.map { it.value }.toSet()
+private val BLOCK_TYPES = BlockType.entries.map { it.value }.toSet()
 
 /**
  * Fast pre-check for a hub-tree PUT body (push --hub/--section/--block). Like

@@ -1,5 +1,7 @@
 package com.sloopworks.dayfold.cli
 
+import com.sloopworks.dayfold.schema.BlockType
+import com.sloopworks.dayfold.schema.Status
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -30,5 +32,16 @@ class HubTreeValidateTest {
 
   @Test fun `malformed JSON is reported, not thrown`() {
     bad(validateHubTree("hubs", """{not json"""), "invalid hubs JSON")
+  }
+
+  // The block-type + hub-status accept-lists are DERIVED from the generated schema
+  // enums (Content.kt). This locks that derivation: every value the schema declares
+  // must validate. If the schema adds/removes a value, this passes automatically —
+  // and it fails loudly if anyone re-hardcodes the lists and misses one (drift).
+  @Test fun `every generated BlockType and hub Status is accepted (no schema drift)`() {
+    for (t in BlockType.entries)
+      ok(validateHubTree("blocks", """{"sectionId":"s1","type":"${t.value}"}"""))
+    for (s in Status.entries)
+      ok(validateHubTree("hubs", """{"type":"party-event","title":"x","status":"${s.value}"}"""))
   }
 }
