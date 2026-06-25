@@ -102,6 +102,37 @@ class SyncEngineTest {
     assertEquals("HTTP 500", store.state.error)
   }
 
+  // ADR 0020: each page is its own atomic applyDelta, so a multi-page drain that
+  // fails on a LATER page must keep the progress already committed — page 1's rows
+  // + cursor survive, and the NEXT sync resumes from that cursor (no data lost, none
+  // re-fetched from scratch). Only the failure is surfaced.
+  @Test fun `syncNow preserves committed progress on mid-drain failure and resumes from it`() = runBlocking {
+    val cs = freshStore()
+    val seen = mutableListOf<String?>()
+    val sc = syncClient(MockEngine { req ->
+      seen += req.url.parameters["since"]
+      when (seen.size) {
+        1 -> respond("""{"changes":{"cards":[{"id":"a","title":"A"}]},"tombstones":[],"next_cursor":"p1","has_more":true}""",
+          HttpStatusCode.OK)                                       // page 1 commits
+        2 -> respond("boom", HttpStatusCode.InternalServerError)   // page 2 fails mid-drain
+        else -> respond("""{"changes":{"cards":[{"id":"b","title":"B"}]},"tombstones":[],"next_cursor":"p2","has_more":false}""",
+          HttpStatusCode.OK)                                       // resume delivers page 2
+      }
+    })
+    val store = createAppStore(debug = false)
+    val e = SyncEngine(store, cs, sc, nowProvider = { "2026-06-18T10:00:00Z" })
+
+    e.syncNow()                                                    // drains p1, then page 2 500s
+    assertEquals(listOf("a"), cs.activeCards().map { it.id })      // page-1 rows survived
+    assertEquals("p1", cs.cursor())                                // cursor advanced to p1 only — not reset, not skipped
+    assertEquals("HTTP 500", store.state.error)                    // failure surfaced
+
+    e.syncNow()                                                    // resume
+    assertEquals(listOf("a", "b"), cs.activeCards().map { it.id }) // page 2 now applied on top
+    assertEquals("p2", cs.cursor())
+    assertEquals(listOf(null, "p1", "p1"), seen)                   // resumed from p1, never re-fetched from scratch
+  }
+
   // ADR 0030 round-1 P0-2: a removed member (403) / non-member (404) must not retain
   // family content — the cache is wiped and the session signs out.
   @Test fun `tenancy revocation (403) wipes the local cache and signs out`() = runBlocking {
