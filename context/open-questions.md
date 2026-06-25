@@ -6,12 +6,13 @@ bootstrap from validation round 1 (`research/validation-round1-2026-06.md`).
 
 ## Blocking (gate validation → build)
 
-- **OQ-license:** How should Dayfold (apps + CLI) be licensed & published —
-  can it be open source *safely* (security + business), which license, and can
-  it still be monetized? Ideal = OSS (showcase/resume/free tooling) + a paid
-  path. → feeds a licensing ADR + closes ADR 0031's deferred license gate.
-  Scope/method: `research/licensing-open-source-strategy-brief-2026-06.md`
-  (`TASK-license-strategy`). **Legal/business → operator + `[pending-counsel]`.**
+- **OQ-license:** How should Dayfold be licensed & published? **Researched
+  2026-06-25 → Proposed ADR 0032 (awaiting operator + `[pending-counsel]`).**
+  Findings: open-source-for-showcase = GO (near-zero opportunity cost); Apache-2.0
+  client/CLI/schema + AGPL-3.0 server (not BSL) + G1 brains closed-by-not-publishing;
+  monetize via hosted SaaS only; DCO contributions; blocking pre-flight secret scan.
+  Report: `research/2026-06-25-licensing-open-source-strategy.md`. Closes ADR 0031's
+  license gate on acceptance.
 - **OQ-wtp:** Will any non-operator family *pay* for this over free
   incumbents (Gemini Daily Brief / Cozi / Maple)? Only field-provable.
   → feeds A4, A7, Gate G1b, KS-5. **The single product-defining unknown.**

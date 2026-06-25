@@ -569,6 +569,8 @@ if go, a Proposed ADR.
 
 ## TASK-license-strategy — Licensing & open-source strategy (research) · ADR-class
 
+**✅ RESEARCH DONE 2026-06-25 → Proposed ADR 0032** (awaiting operator + [pending-counsel]). Report: `research/2026-06-25-licensing-open-source-strategy.md`. Verdict: open-source-for-showcase GO; Apache client/CLI/schema + AGPL server + closed G1; hosted-SaaS monetization. Original brief below.
+
 Deep research + brainstorming on **how to license & publish Dayfold (apps + CLI)**:
 can it be open source **safely** (security + business-strategy), which license, can it
 still be **monetized** if OSS, and the business-strategy tradeoffs. Ideal = OSS (for
