@@ -100,6 +100,51 @@ class HubEngineTest {
     assertNull(store.state.hubError)  // no error dispatched
   }
 
+  @Test fun `closeHub clears the substate AND cancels the tree subscription`() = runBlocking {
+    val store = readyStore()
+    val cs = freshContentStore()
+    cs.applyDelta(
+      changedCards = emptyList(), changedHubs = listOf(Hub("h1", title = "Trip", visibility = "family")),
+      changedSections = listOf(HubSection("s1", hubId = "h1", title = "X")),
+      changedBlocks = listOf(HubBlock("b1", sectionId = "s1", type = "text", bodyMd = "v1")),
+      tombstones = emptyList(), nextCursor = "c1", nowIso = "2026-06-24T00:00:00Z",
+    )
+    val e = engine(store, MockEngine { respond("{}", HttpStatusCode.OK, jsonCt) }, contentStore = cs)
+    e.openHub("h1")
+    await(store) { it.currentHubTree?.hub?.title == "Trip" }
+
+    e.closeHub()
+    assertNull(store.state.currentHubId)
+    assertNull(store.state.currentHubTree)
+    assertNull(store.state.hubFocusBlockId)
+
+    // the tree subscription must be cancelled — a later DB write to h1 must NOT
+    // re-dispatch HubTreeLoaded (else the coroutine leaks per hub open).
+    cs.applyDelta(
+      changedCards = emptyList(), changedHubs = listOf(Hub("h1", title = "Trip", visibility = "family")),
+      changedSections = listOf(HubSection("s1", hubId = "h1", title = "X")),
+      changedBlocks = listOf(HubBlock("b1", sectionId = "s1", type = "text", bodyMd = "v2")),
+      tombstones = emptyList(), nextCursor = "c2", nowIso = "2026-06-24T00:01:00Z",
+    )
+    Thread.sleep(250)
+    assertNull(store.state.currentHubTree)   // cancelled → no stray re-render
+  }
+
+  @Test fun `openHub with a focus block sets the deep-link arrival highlight`() = runBlocking {
+    val store = readyStore()
+    val cs = freshContentStore()
+    cs.applyDelta(
+      changedCards = emptyList(), changedHubs = listOf(Hub("h1", title = "Party", visibility = "family")),
+      changedSections = listOf(HubSection("s1", hubId = "h1", title = "X")),
+      changedBlocks = listOf(HubBlock("b1", sectionId = "s1", type = "text", bodyMd = "hi")),
+      tombstones = emptyList(), nextCursor = "c1", nowIso = "2026-06-24T00:00:00Z",
+    )
+    val e = engine(store, MockEngine { respond("{}", HttpStatusCode.OK, jsonCt) }, contentStore = cs)
+    e.openHub("h1", focusBlockId = "b1")
+    await(store) { it.currentHubTree != null }
+    assertEquals("b1", store.state.hubFocusBlockId)  // SetHubFocus dispatched + survived HubTreeLoaded
+  }
+
   @Test fun `idle with no family or session is a no-op`() = runBlocking {
     val store = createAppStore(debug = false)            // no session/family
     var hit = false
