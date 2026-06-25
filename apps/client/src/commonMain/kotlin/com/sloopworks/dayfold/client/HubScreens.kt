@@ -257,6 +257,18 @@ fun HubDetailScreen(
             )
           }
         }
+        // a freshly-created hub (e.g. just `push --hub`'d) has no content yet —
+        // show a calm note instead of a blank void under the header.
+        if (tree.sections.isEmpty()) {
+          item(key = "hub-empty") {
+            Text(
+              "Nothing here yet — this hub's details will appear as they're added.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(top = 12.dp),
+            )
+          }
+        }
         // sections (ordered) each followed by their blocks (grouped by section_id).
         tree.sections.sortedBy { it.ord }.forEach { section ->
           item(key = "sec-${section.id}") {

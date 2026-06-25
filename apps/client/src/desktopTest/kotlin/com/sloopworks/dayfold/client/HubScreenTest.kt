@@ -96,6 +96,14 @@ class HubScreenTest {
     onNodeWithText("That hub is no longer available.").assertIsDisplayed()
   }
 
+  @Test fun emptyHubShowsACalmNoContentNote() = runComposeUiTest {
+    // a freshly-created hub (no sections/blocks) must not render a blank void
+    val tree = HubTree(hub = Hub(id = "h1", type = "party-event", title = "New party", status = "planning", visibility = "family"))
+    setContent { MaterialTheme { HubDetailScreen(AppState(currentHubId = "h1", currentHubTree = tree)) } }
+    onNodeWithText("New party").assertIsDisplayed()                       // header still renders
+    onNodeWithText("Nothing here yet", substring = true).assertIsDisplayed()
+  }
+
   @Test fun deepLinkArrivalBadgesTheFocusedBlock() = runComposeUiTest {
     val tree = HubTree(
       hub = Hub(id = "h1", title = "Party", status = "active", visibility = "family"),
