@@ -1,0 +1,99 @@
+# Release the `dayfold` CLI on a `cli-v<semver>` tag (ADR 0031).
+# Builds the versioned dist, publishes a GitHub Release, and bumps the Homebrew
+# formula in SloopWorks/homebrew-tap. Inert until a `cli-v*` tag is pushed; the
+# formula-bump step is skipped until the HOMEBREW_TAP_TOKEN secret exists, so this is
+# safe to land before the operator finishes one-time tap setup (processes/cli-release.md).
+#
+# Security posture (from the multi-agent review): the tag name is untrusted, so it is
+# (1) strictly validated as ^[0-9]+.[0-9]+.[0-9]+$ before any use, and (2) only ever
+# passed to shell via `env:` and referenced as a quoted "$VAR" — never interpolated
+# `${{ }}` straight into a run block. The tap token is passed via GIT_CONFIG_* env
+# (never in a URL/argv/.git/config). The release upload uses the pre-installed `gh`
+# CLI (no third-party action). Restrict who can push `cli-v*` tags (operator).
+name: Release CLI
+
+on:
+  push:
+    tags: ["cli-v*"]
+
+permissions:
+  contents: write          # create the GitHub Release + upload the asset
+
+concurrency:
+  group: release-cli       # serialize releases so two tags can't race the tap push
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5    # v4 (SHA-pinned)
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4 (SHA-pinned)
+        with: { distribution: temurin, java-version: "17" }
+
+      - name: Derive + strictly validate the version
+        id: v
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#cli-v}"
+          # Anchored full-match — rejects any shell metacharacter / suffix / pre-release.
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag '${GITHUB_REF_NAME}' is not cli-v<MAJOR.MINOR.PATCH>"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the dist (standalone CLI Gradle build)
+        working-directory: apps/cli
+        env:
+          VERSION: ${{ steps.v.outputs.version }}   # → env, then quoted shell var (no run-block interpolation)
+        run: ./gradlew --no-daemon distTar -PcliVersion="$VERSION"
+
+      - name: Publish the GitHub Release + tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "cli-v$VERSION" \
+            "apps/cli/build/distributions/dayfold-$VERSION.tar" \
+            --title "dayfold CLI $VERSION" \
+            --notes "Install: \`brew install sloopworks/tap/dayfold\` · update: \`brew upgrade dayfold\` (ADR 0031)."
+
+      # One-time setup gate (ADR 0031): skipped until HOMEBREW_TAP_TOKEN is set.
+      - name: Is the tap configured?
+        id: tap
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::HOMEBREW_TAP_TOKEN not set — skipping formula bump (release published)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump the Homebrew formula
+        if: steps.tap.outputs.ready == 'true'
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.v.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tarball="apps/cli/build/distributions/dayfold-${VERSION}.tar"
+          export SHA="$(shasum -a 256 "$tarball" | cut -d' ' -f1)"
+          export URL="https://github.com/${REPO}/releases/download/cli-v${VERSION}/dayfold-${VERSION}.tar"
+          # Auth via GIT_CONFIG_* env (scoped to github.com) — token never in a URL,
+          # argv, or .git/config; covers both clone and push.
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
+          git clone --depth 1 https://github.com/SloopWorks/homebrew-tap.git tap
+          # Pinned, value-via-$ENV (no shell interpolation into perl); anchored to the
+          # quoted field so a trailing comment can never be eaten.
+          perl -0pi -e 's|^(  url )"[^"]*"|$1"$ENV{URL}"|m; s|^(  sha256 )"[0-9a-f]*"|$1"$ENV{SHA}"|m' tap/Formula/dayfold.rb
+          git -C tap config user.name "dayfold-ci"
+          git -C tap config user.email "ci@users.noreply.github.com"
+          git -C tap diff --quiet || git -C tap commit -am "dayfold ${VERSION}"   # no-op safe
+          git -C tap push

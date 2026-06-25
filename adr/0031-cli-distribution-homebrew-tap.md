@@ -2,9 +2,14 @@
 
 ## Status
 
-**Proposed** 2026-06-25 (agent-drafted from the distribution spike; operator-gated —
-adds a distribution channel + release automation + a public-distribution/licensing
-implication). Immutable once Accepted — supersede, do not edit. Composes with
+**Accepted** 2026-06-25 (operator-directed — "approve 0031"). The decision (Option A:
+first-party Homebrew tap, zero-config JVM, tag-driven release) is adopted. The
+agent-buildable pipeline (`release-cli.yml` + the canonical formula + the release
+runbook) is implemented under this ADR; the **operator setup gates remain open** and
+are listed below (license/public-distribution decision, create the tap repo, add the
+`HOMEBREW_TAP_TOKEN` secret) — the workflow is inert until a `cli-v*` tag and skips
+the formula bump until the secret exists. Immutable now — supersede, do not edit.
+Composes with
 **ADR 0018** (TS/Vercel API; CLI stays Kotlin), **ADR 0026** (`com.sloopworks.*`
 naming; CLI binary `dayfold`), and **ADR 0012** (agent-operated build — but the
 operator steps here exceed those rails: secrets + an external repo + licensing).
