@@ -5,6 +5,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
@@ -109,5 +110,21 @@ class HubScreenTest {
     setContent { MaterialTheme { HubDetailScreen(state) } }
     onNodeWithText("Order balloons").assertIsDisplayed()
     onNodeWithText("FROM YOUR BRIEFING", substring = true).assertIsDisplayed()  // arrival badge on the focused block
+  }
+
+  @Test fun iconOnlyControlsExposeAccessibleLabels() = runComposeUiTest {
+    // detail: the glyph-only back button reads "Back to hubs", the "←" glyph is decorative
+    val tree = HubTree(hub = Hub(id = "h1", title = "Surgery", status = "active", visibility = "restricted"))
+    setContent { MaterialTheme { HubDetailScreen(AppState(currentHubId = "h1", currentHubTree = tree)) } }
+    onNodeWithContentDescription("Back to hubs").assertExists()
+    onAllNodesWithText("←").assertCountEquals(0)   // glyph not announced
+    onAllNodesWithText("▦").assertCountEquals(0)   // bottom-nav glyph decorative (label "Hubs" carries it)
+  }
+
+  @Test fun listRestrictedMarkerReadsAsPrivate() = runComposeUiTest {
+    // the list's lock glyph exposes a "Private" content description for screen readers
+    setContent { MaterialTheme { HubListScreen(AppState(hubs = listOf(
+      Hub(id = "h2", type = "medical", title = "Dad's surgery", status = "active", visibility = "restricted")))) } }
+    onNodeWithContentDescription("Private").assertExists()
   }
 }

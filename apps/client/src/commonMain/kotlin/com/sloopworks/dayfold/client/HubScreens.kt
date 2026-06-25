@@ -30,6 +30,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,12 +52,13 @@ fun DayfoldBottomNav(hubsActive: Boolean, onNow: () -> Unit, onHubs: () -> Unit)
   NavigationBar {
     NavigationBarItem(
       selected = !hubsActive, onClick = onNow,
-      icon = { Text("◴") },                                  // text glyph (no material-icons dep)
+      // glyph is decorative; the "Now" label + selected state carry a11y meaning
+      icon = { Text("◴", Modifier.clearAndSetSemantics {}) },  // text glyph (no material-icons dep)
       label = { Text("Now") },
     )
     NavigationBarItem(
       selected = hubsActive, onClick = onHubs,
-      icon = { Text("▦") },
+      icon = { Text("▦", Modifier.clearAndSetSemantics {}) },
       label = { Text("Hubs") },
     )
   }
@@ -141,8 +145,10 @@ private fun HubRow(hub: Hub, onClick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
           Text(hub.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
           if (hub.visibility == "restricted") {
-            // calm restricted marker — warm-neutral, never error-red
-            Text("🔒", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 7.dp))
+            // calm restricted marker — warm-neutral, never error-red. Icon-only →
+            // give the screen reader "Private" instead of announcing the lock glyph.
+            Text("🔒", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(start = 7.dp).semantics { contentDescription = "Private" })
           }
         }
         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -188,7 +194,12 @@ fun HubDetailScreen(
     topBar = {
       TopAppBar(
         title = { Text(tree?.hub?.title ?: "Hub", fontWeight = FontWeight.SemiBold) },
-        navigationIcon = { IconButton(onClick = onBack) { Text("←", style = MaterialTheme.typography.titleLarge) } },
+        navigationIcon = {
+          // glyph-only control → give the screen reader a real label, not "←"
+          IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Back to hubs" }) {
+            Text("←", style = MaterialTheme.typography.titleLarge, modifier = Modifier.clearAndSetSemantics {})
+          }
+        },
       )
     },
     bottomBar = { DayfoldBottomNav(hubsActive = true, onNow = onNow, onHubs = {}) },
@@ -220,12 +231,13 @@ fun HubDetailScreen(
               // tappable → "Who can see this hub" sheet
               Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(999.dp),
-                modifier = Modifier.padding(start = 8.dp).clickable(onClick = onOpenAudience),
+                // onClickLabel tells the screen reader what the tap does; 🔒/⌄ are decorative
+                modifier = Modifier.padding(start = 8.dp).clickable(onClick = onOpenAudience, onClickLabel = "See who can see this hub"),
               ) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                  Text("🔒", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  Text("🔒", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.clearAndSetSemantics {})
                   Text("Private", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 6.dp))
-                  Text("⌄", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 5.dp))
+                  Text("⌄", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 5.dp).clearAndSetSemantics {})
                 }
               }
             }
