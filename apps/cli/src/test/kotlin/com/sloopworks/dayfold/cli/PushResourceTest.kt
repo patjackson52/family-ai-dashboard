@@ -15,4 +15,9 @@ class PushResourceTest {
     assertEquals("hubs", pushResource(arrayOf("push", "h1", "hub.json", "--hub")))
     assertEquals("hubs", pushResource(arrayOf("push", "--hub", "h1", "hub.json")))
   }
+
+  @Test fun `--section and --block target their hub-tree resources`() {
+    assertEquals("sections", pushResource(arrayOf("push", "s1", "sec.json", "--section")))
+    assertEquals("blocks", pushResource(arrayOf("push", "b1", "blk.json", "--block")))
+  }
 }

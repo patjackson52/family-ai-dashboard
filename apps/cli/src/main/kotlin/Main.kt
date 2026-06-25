@@ -138,14 +138,15 @@ fun main(args: Array<String>) {
       }
     }
 
-    // dayfold push <id> <file.json> [--hub]  — PUT a briefing card (default) or a Hub.
+    // dayfold push <id> <file.json> [--hub|--section|--block]  — card (default) or hub tree.
     "push" -> {
       val id = args.getOrNull(1) ?: usage()
       val file = args.getOrNull(2) ?: usage()
       val payload = Files.readString(Path.of(file))
-      // --hub targets a Hub (PUT /hubs/:id) instead of a briefing card. The server
-      // is the authority for hub shape (no generated hub schema in the CLI yet), so
-      // the card --type validation below applies to cards only.
+      // --hub/--section/--block target the hub tree (PUT /hubs|sections|blocks/:id)
+      // instead of a briefing card. The server is the authority for hub-tree shape
+      // (no generated schema in the CLI yet), so the card --type validation below
+      // applies to cards only.
       val resource = pushResource(args)
       // CL-3: opt-in local typed validation (`--type <t>`) — fail fast with field
       // errors before the server, against the generated schema types. Server stays
@@ -206,9 +207,15 @@ fun main(args: Array<String>) {
 
 private val CONTENT_TYPES = listOf("file", "link", "invite", "contact", "geo", "email")
 
-/** The content resource `push` targets: a Hub with `--hub`, else a briefing card.
- *  PUT path is /families/:fid/<resource>/:id. */
-fun pushResource(args: Array<String>): String = if (hasFlag(args, "--hub")) "hubs" else "cards"
+/** The content resource `push` targets — PUT /families/:fid/<resource>/:id.
+ *  --hub | --section | --block author a hub tree; default is a briefing card.
+ *  (section bodies carry `hubId`, block bodies carry `sectionId` — server-validated.) */
+fun pushResource(args: Array<String>): String = when {
+  hasFlag(args, "--hub") -> "hubs"
+  hasFlag(args, "--section") -> "sections"
+  hasFlag(args, "--block") -> "blocks"
+  else -> "cards"
+}
 
 /** Value following a `--flag` token (position-agnostic), or null. */
 private fun flagValue(args: Array<String>, flag: String): String? {
@@ -313,9 +320,9 @@ private fun usage(): Nothing {
       "  login [--allow-env-key] | logout | whoami\n" +
       "        (refresh token is stored in the OS keychain; --allow-env-key permits\n" +
       "         a 0600-file fallback on hosts without a keychain — headless/CI)\n" +
-      "  push <id> <file.json> [--hub] [--type file|link|invite|contact|geo|email]\n" +
-      "        (default: a briefing card; --hub PUTs a Hub. --type runs local\n" +
-      "         typed card validation before the server)\n" +
+      "  push <id> <file.json> [--hub|--section|--block] [--type file|link|...]\n" +
+      "        (default: a briefing card; --hub/--section/--block author a hub tree.\n" +
+      "         --type runs local typed card validation before the server)\n" +
       "  pull [--hub <id>]          read content back (cards+hubs, or one hub tree)\n" +
       "  template <type>            print a valid starter card for the type",
   )
