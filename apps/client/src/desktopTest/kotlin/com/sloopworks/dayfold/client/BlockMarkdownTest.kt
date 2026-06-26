@@ -49,4 +49,19 @@ class BlockMarkdownTest {
     assertEquals(1, boldSpans(renderBlockMarkdown("- **Jul 1** — deadline")))
     assertEquals("Health insurance waiver", renderBlockMarkdown("Health insurance waiver").text)
   }
+
+  @Test fun `tables drop the separator row, join cells, and bold the header`() {
+    val out = renderBlockMarkdown(
+      "| Office | Email | Phone |\n|--------|-------|-------|\n| Financial Aid | finaid@butler.edu | 888-940-8100 |",
+    )
+    // separator row gone (no raw dashes/pipes); cells joined; rows on their own lines
+    assertEquals("Office  ·  Email  ·  Phone\nFinancial Aid  ·  finaid@butler.edu  ·  888-940-8100", out.text)
+    assertEquals(1, boldSpans(out))   // only the header row is bold
+  }
+
+  @Test fun `a lone dashed line without pipes is NOT treated as a table separator`() {
+    // a bullet with a dash, and a plain line, must survive (no over-greedy separator match)
+    assertEquals("• item", renderBlockMarkdown("- item").text)
+    assertEquals("a | b", renderBlockMarkdown("a | b").text)   // not a table row (no leading/trailing pipe)
+  }
 }

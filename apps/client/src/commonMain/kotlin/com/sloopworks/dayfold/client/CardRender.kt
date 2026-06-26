@@ -72,6 +72,8 @@ fun hasActionLinks(md: String): Boolean =
 private val INLINE = Regex("""\*\*(.+?)\*\*|\[([^\]]+)]\(([^)]+)\)|_([^_]+?)_""")
 private val CHECKBOX = Regex("""^(\s*)[-*]\s+\[([ xX])]\s+(.*)$""")
 private val BULLET = Regex("""^(\s*)[-*]\s+(.*)$""")
+private val TABLE_ROW = Regex("""^\s*\|.*\|\s*$""")
+private val TABLE_SEP = Regex("""^\s*\|[\s:|-]*-[\s:|-]*\|\s*$""")   // a |---|---| separator row
 
 private fun AnnotatedString.Builder.appendInline(text: String) {
   var i = 0
@@ -96,14 +98,24 @@ private fun AnnotatedString.Builder.appendInline(text: String) {
 
 fun renderBlockMarkdown(md: String): AnnotatedString = buildAnnotatedString {
   val lines = md.split("\n")
+  var first = true
   lines.forEachIndexed { idx, line ->
+    if (TABLE_SEP.matches(line)) return@forEachIndexed          // drop |---| separator rows
+    if (!first) append("\n")                                    // prepend so dropped rows leave no blank line
+    first = false
     val cb = CHECKBOX.find(line)
     val b = if (cb == null) BULLET.find(line) else null
+    val isTable = cb == null && b == null && TABLE_ROW.matches(line)
     when {
       cb != null -> { append(if (cb.groupValues[2].trim().lowercase() == "x") "☑ " else "☐ "); appendInline(cb.groupValues[3]) }
       b != null -> { append("• "); appendInline(b.groupValues[2]) }
+      isTable -> {                                              // | a | b | → "a  ·  b"; header (row above a separator) bold
+        val cells = line.trim().trim('|').split("|").map { it.trim() }
+        val header = idx + 1 < lines.size && TABLE_SEP.matches(lines[idx + 1])
+        val joined = cells.joinToString("  ·  ")
+        if (header) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(joined) } else appendInline(joined)
+      }
       else -> appendInline(line)
     }
-    if (idx < lines.size - 1) append("\n")
   }
 }
