@@ -150,9 +150,11 @@ private fun CardItem(card: Card) {
         style = if (card.kind == "countdown") MaterialTheme.typography.headlineSmall
         else MaterialTheme.typography.titleMedium,
       )
-      // body with allowlisted tappable action-links
+      // body: full markdown (bold/italic/lists/tables) + allowlisted tappable links —
+      // same renderer as hub blocks, so a CLI-authored card body renders formatted,
+      // not raw `**`/`-`. Plain text + links are byte-identical to the old link-only path.
       card.bodyMd?.takeIf { it.isNotBlank() }?.let {
-        Text(renderCardBody(it), style = MaterialTheme.typography.bodyMedium)
+        Text(renderBlockMarkdown(it), style = MaterialTheme.typography.bodyMedium)
       }
       // provenance source chip (user = none)
       sourceLabel(card.provenance?.source)?.let { src ->
