@@ -265,4 +265,24 @@ class AuthFlowUiTest {
     onNodeWithTag("device-continue").performClick()
     assertEquals(null, looked)                                   // submit() guards on 8 chars; button is disabled too
   }
+
+  // Outcome screens differ by recoverability: an EXPIRED request can be retried,
+  // a DENIED one is terminal. Pinning that distinction (+ the outcome-done wiring).
+  @Test fun expiredOutcomeOffersRetryAndDone() = runComposeUiTest {
+    var retried = false; var done = false
+    setContent { DayfoldTheme { DeviceExpiredScreen(onRetry = { retried = true }, onDone = { done = true }) } }
+    onNodeWithText("Enter a new code").performClick()
+    assertTrue(retried)                                          // timeout is recoverable
+    onNodeWithTag("outcome-done").performClick()
+    assertTrue(done)
+  }
+
+  @Test fun deniedOutcomeIsTerminalDoneOnlyNoRetry() = runComposeUiTest {
+    var done = false
+    setContent { DayfoldTheme { DeviceDeniedScreen(onDone = { done = true }) } }
+    // a denial must NOT offer "Enter a new code" — only expiry does
+    assertTrue(onAllNodesWithText("Enter a new code").fetchSemanticsNodes().isEmpty())
+    onNodeWithTag("outcome-done").performClick()
+    assertTrue(done)
+  }
 }
