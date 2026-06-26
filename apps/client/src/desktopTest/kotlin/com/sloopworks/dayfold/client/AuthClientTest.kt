@@ -104,6 +104,15 @@ class AuthClientTest {
     assertEquals(Session("a2", "r2"), s)
   }
 
+  // A dead/reused refresh token → server 401. refresh() must THROW (not return a
+  // bogus session) — every refresh-and-retry path (SyncEngine #104, AuthEngine,
+  // HubEngine) keys off this to fall back to SyncFailed / sign-out.
+  @Test fun `refresh throws on a rejected refresh token`() = runBlocking<Unit> {
+    val engine = MockEngine { respond("invalid_grant", HttpStatusCode.Unauthorized) }
+    val ex = assertFailsWith<AuthHttpException> { client(engine).refresh("dead") }
+    assertEquals(401, ex.status)
+  }
+
   @Test fun `signout accepts 204`() = runBlocking<Unit> {
     val engine = MockEngine { respond("", HttpStatusCode.NoContent) }
     client(engine).signout("ACCESS")   // no throw
