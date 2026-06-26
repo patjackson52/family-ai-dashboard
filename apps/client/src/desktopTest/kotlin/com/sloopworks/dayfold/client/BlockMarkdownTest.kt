@@ -105,4 +105,13 @@ class BlockMarkdownTest {
     assertEquals("Tap here now", out.text)                               // the label, not the url
     assertEquals(1, out.getLinkAnnotations(0, out.length).size)
   }
+
+  @Test fun `image markdown degrades to a labeled link — no stray bang, never inline-loaded`() {
+    val ok = renderBlockMarkdown("see ![the map](https://butler.edu/map.png) here")
+    assertEquals("see 🖼 the map here", ok.text)                         // 🖼 + alt; no "!", no raw ()/url
+    assertEquals(1, ok.getLinkAnnotations(0, ok.length).size)            // taps out to the image (vetted), not inline-loaded
+    val bad = renderBlockMarkdown("![x](javascript:alert)")
+    assertEquals("🖼 x", bad.text)
+    assertTrue(bad.getLinkAnnotations(0, bad.length).isEmpty())          // disallowed scheme → plain label
+  }
 }
