@@ -193,4 +193,6 @@ New prototype-level open items:
   is `body_md`-only). **Action:** reconcile the two to one source of truth (likely
   regenerate/realign `content.schema.json` ↔ client model) before structured-payload
   authoring is relied on; until then authors use the client-model field names (now in
-  `apps/cli/templates/README.md`) or `body_md`.
+  `apps/cli/templates/README.md`) or `body_md`. → **ADR 0035 (Proposed)** picks the
+  direction (Option A: align the schema to the client render model + add block-payload
+  validation); awaiting operator accept.
