@@ -1,0 +1,55 @@
+# ADR 0033 point 5 — a controlled CI way to run the migration runner against a real
+# database (prod by default), with the Actions log as the ADR-0012 "log every prod
+# action" trail. MANUAL (workflow_dispatch), not auto-on-push: Vercel auto-deploys on
+# merge, and a separate job can't guarantee "migrate before the function publishes",
+# so auto-on-deploy would risk a code-ahead-of-schema window. Manual keeps ordering in
+# the operator's hands; auto-on-deploy is a deliberate future step (needs the deploy
+# mechanism settled). Default mode is dry-run (safe — applies nothing).
+name: Migrate (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run = list pending · apply = run pending · backfill = mark all applied WITHOUT running (existing hand-applied DB, one-time)"
+        type: choice
+        options: [dry-run, apply, backfill]
+        default: dry-run
+
+jobs:
+  migrate:
+    name: "db:migrate (${{ inputs.mode }})"
+    runs-on: ubuntu-latest
+    # If a protected `production` GitHub Environment exists, this adds an approval gate
+    # before the job runs; harmless if unconfigured.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "24" }
+      - run: npm ci
+      - name: Guard — DATABASE_URL secret must be set
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "::error::set the DATABASE_URL repo secret (prod Neon connection) to run migrations"
+            exit 1
+          fi
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: "db:migrate (${{ inputs.mode }})"
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          case "${{ inputs.mode }}" in
+            dry-run)  npm run db:migrate -- --dry-run ;;
+            apply)    npm run db:migrate ;;
+            backfill) npm run db:migrate -- --backfill ;;
+            *) echo "::error::unknown mode"; exit 2 ;;
+          esac
+      - name: Verify after apply/backfill (schema-drift)
+        if: ${{ inputs.mode != 'dry-run' }}
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:check
