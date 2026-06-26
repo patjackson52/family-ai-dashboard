@@ -5,7 +5,7 @@ import { bodyLimit } from "hono/body-limit";
 import { q, pool } from "./db.ts";
 import { stripServerManaged, stampProvenance, constantTimeEqual } from "./security.ts";
 import { BriefingCardSchema } from "./generated/content.ts";
-import { crossValidateCard } from "./content-validation.ts";
+import { crossValidateCard, blockPayloadIssues } from "./content-validation.ts";
 import * as repo from "./repo.ts";
 // Auth imports are lazy (dynamic) so that api.test.ts (no AUTH_* env) can still
 // load app.ts without triggering the module-level env-guard throws in tokens.ts.
@@ -556,6 +556,9 @@ app.put("/families/:fid/blocks/:id", async (c) => {
   const body = stampProvenance(rest, a.cred.id);     // un-forgeable provenance
   const parsed = BlockSchema.safeParse({ ...body, id });
   if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  // BlockSchema.payload is z.any() (codegen stub) — validate the payload here (ADR 0035).
+  const payloadIssues = blockPayloadIssues(parsed.data);
+  if (payloadIssues.length) return c.json({ type: "validation", issues: payloadIssues }, 422);
   const row = await hubs.upsertBlock(fid, id, sectionId, parsed.data);
   return row ? c.json(row, 200) : c.json({ type: "conflict", detail: "parent section missing or deleted" }, 409);
 });

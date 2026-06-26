@@ -48,3 +48,37 @@ export function crossValidateCard(card: { type?: unknown; payload?: unknown }): 
   }
   return [];
 }
+
+/**
+ * Block-payload structural pre-check (ADR 0035, Option C). The generated
+ * `BlockSchema.payload` is `z.any()` (codegen stubbed the per-type `oneOf` $refs),
+ * so the server does NOT validate a structured block's payload — a `contact` block
+ * with no name, or `payload: "oops"`, stores fine and then can't render. Mirror the
+ * CLI's tolerant per-type check: a payload, when present, must be an object carrying
+ * its type's core field. TOLERANT — accepts BOTH the canonical schema names and the
+ * current client-render names (document `ref`|`docRef`; budget `items`|`total`/`spent`);
+ * the single-representation unification is M1 (`OQ-block-payload-schema`). A block with
+ * no payload is fine (renders `body_md` or a placeholder).
+ */
+export function blockPayloadIssues(block: { type?: unknown; payload?: unknown; body_md?: unknown }): CrossIssue[] {
+  const { type, payload, body_md } = block;
+  if (payload == null) return [];
+  if (typeof payload !== "object" || Array.isArray(payload)) {
+    return [{ path: ["payload"], message: "payload must be an object" }];
+  }
+  if (type === "text" || type === "markdown") return [];
+  const p = payload as Record<string, unknown>;
+  const has = (...keys: string[]) => keys.some((k) => p[k] != null);
+  const arr = (k: string) => Array.isArray(p[k]) && (p[k] as unknown[]).length > 0;
+  const hasBody = typeof body_md === "string" && body_md.trim().length > 0;
+  const ok =
+    type === "checklist" ? arr("items") :
+    type === "budget" ? arr("items") || has("total", "spent") :
+    type === "document" ? has("ref", "docRef") :
+    type === "link" ? has("url") :
+    type === "contact" ? has("name") :
+    type === "location" ? has("label") :
+    type === "milestone" ? has("date", "label") || hasBody :
+    true; // unknown type already rejected by the enum
+  return ok ? [] : [{ path: ["payload"], message: `block ${String(type)}: payload present but missing its core field` }];
+}
