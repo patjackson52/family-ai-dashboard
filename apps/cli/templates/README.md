@@ -1,8 +1,12 @@
 # Dayfold typed-content authoring (CLI + Claude)
 
-The MVP wedge: the operator + Claude Code author typed content cards and `push`
-them through the content API. The dashboard renders intelligence produced here —
-it is not a chatbot. (ADR 0022; content epic.)
+The MVP wedge: the operator + Claude Code author typed content cards **and
+event/project hubs** and `push` them through the content API. The dashboard renders
+intelligence produced here — it is not a chatbot. (ADR 0022; content epic.)
+
+Cards are the **feed** — short, time-bound briefing items. Hubs are the standing
+**event/project tree** — a multi-member briefing page (the defensible wedge). The
+card loop is next; **hub authoring has its own section below.**
 
 ## The 6 content types
 
@@ -34,6 +38,82 @@ it locally before the server does.
    ```
 
    Without `--type`, `push` sends the file unchanged (no local validation).
+
+## Hubs — authoring the event/project tree (the defensible wedge)
+
+A **hub** is a standing page for a family event or project (starting college, a
+move, a party) — the multi-member briefing no native OS ships. It's a 3-level tree,
+authored top-down with author-chosen slug IDs:
+
+```
+hub      id: lillian-butler-2026     (type + title + status + countdown_to)
+└─ section   hubId → lillian-butler-2026,  id: dates
+   └─ block      sectionId → dates,        id: ebill-due
+```
+
+Each level has its own starter + `push` resource flag. The `<id>` you pass to
+`push` becomes the resource id (a slug you choose); the body's parent field
+(`hubId` / `sectionId`) wires it into the tree:
+
+| Level   | starter            | push                                    | parent field |
+|---------|--------------------|-----------------------------------------|--------------|
+| hub     | `template hub`     | `push <hubId> hub.json --hub`           | —            |
+| section | `template section` | `push <secId> section.json --section`   | `hubId`      |
+| block   | `template block`   | `push <blockId> block.json --block`     | `sectionId`  |
+
+Push the hub first, then its sections (each referencing the hub id), then each
+section's blocks (each referencing the section id). Unlike cards, hub-tree pushes
+run an **always-on** structural pre-check (`validateHubTree`, no `--type` flag):
+
+- **hub** — `title` required; `type` ∈ `vacation` `starting-college` `move`
+  `party-event` `new-baby` `medical` `school-year`; `status` (if set) ∈ `active`
+  `planning` `archived`.
+- **section** — `hubId` required.
+- **block** — `sectionId` required; `type` ∈ `text` `markdown` `checklist` `link`
+  `document` `contact` `location` `milestone` `budget`.
+
+The server stays the authority (CL-2) for the rest — parent ids resolving,
+ordering, field formats.
+
+### Blocks: structured `payload` OR markdown `body_md`
+
+A block carries either a typed `payload` (for `checklist` `link` `document`
+`contact` `location` `milestone` `budget`) **or** plain `body_md` markdown — and a
+typed block with only `body_md` and no payload still renders its markdown, so
+prose-style authoring is fine. `text` / `markdown` blocks are always `body_md`.
+`ord` orders sections within a hub, and blocks within a section (ascending).
+
+### Markdown that renders in `body_md`
+
+The app renders this subset (anything else shows as plain text; a network image is
+never inline-loaded):
+
+- `**bold**`, `_italic_`
+- `- ` bullets · `- [ ]` / `- [x]` checkboxes · `1.` ordered lists
+- `# ` / `## ` headings
+- `| a | b |` tables (with a `|---|` separator row; the first row is the header)
+- `[label](https://…)` links and bare `https://…` autolinks — schemes limited to
+  **https / mailto / tel / geo / sms** (others render as plain text)
+- `![alt](url)` images degrade to a `🖼 alt` link (tapped out, never inline-loaded)
+
+### Worked example
+
+```
+dayfold template hub > hub.json
+#   set title / type / status / countdown_to
+dayfold push lillian-butler-2026 hub.json --hub
+
+dayfold template section > sec.json
+#   "hubId": "lillian-butler-2026", "title": "Dates & Deadlines", "ord": 0
+dayfold push dates sec.json --section
+
+dayfold template block > blk.json
+#   "sectionId": "dates", "type": "milestone", "ord": 0,
+#   "body_md": "**Aug 1** — E-Bill due in full"
+dayfold push ebill-due blk.json --block
+
+dayfold pull --hub lillian-butler-2026     # confirm the rendered tree
+```
 
 ## What the local validator checks (STRUCTURAL — the server is the authority)
 
