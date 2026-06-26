@@ -6,6 +6,8 @@ import com.sloopworks.dayfold.schema.BriefingCardPayload
 import com.sloopworks.dayfold.schema.Status
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -97,13 +99,45 @@ fun validateHubTree(resource: String, json: String): List<String> {
     "sections" -> if (str("hubId").isNullOrBlank()) e += "section: `hubId` is required"
     "blocks" -> {
       if (str("sectionId").isNullOrBlank()) e += "block: `sectionId` is required"
-      when (val t = str("type")) {
+      val t = str("type")
+      when (t) {
         null -> e += "block: `type` is required"
         !in BLOCK_TYPES -> e += "block: type \"$t\" must be one of ${BLOCK_TYPES.joinToString("|")}"
+        else -> e += blockPayloadErrors(t, obj["payload"] as? JsonObject, str("body_md"))
       }
     }
   }
   return e
+}
+
+// ── block payload structural pre-check (ADR 0035, Option C) ──────────────────
+// IF a block carries a `payload`, the core field for its type must be present, so a
+// structured block that can't render is caught before push. A payload-driven block
+// with NO payload is fine — it renders its body_md, or a calm placeholder (#113).
+// TOLERANT by design: accepts BOTH the canonical schema names and the current
+// client-render names (document `ref` OR `docRef`; budget `items` OR `total`/`spent`)
+// — it does NOT yet pick a side (that's the M1 single-representation unification,
+// OQ-block-payload-schema / ADR 0035).
+private fun JsonObject.has(vararg keys: String): Boolean =
+  keys.any { this[it] != null && this[it] !is JsonNull }
+private fun JsonObject.hasNonEmptyArray(key: String): Boolean =
+  (this[key] as? JsonArray)?.isNotEmpty() == true
+
+internal fun blockPayloadErrors(type: String, payload: JsonObject?, bodyMd: String?): List<String> {
+  if (payload == null) return emptyList()                        // body_md path / placeholder — fine (#113)
+  if (type == "text" || type == "markdown") return emptyList()   // these are body_md, not payload-driven
+  val ok = when (type) {
+    "checklist" -> payload.hasNonEmptyArray("items")
+    "budget" -> payload.hasNonEmptyArray("items") || payload.has("total", "spent")
+    "document" -> payload.has("ref", "docRef")
+    "link" -> payload.has("url")
+    "contact" -> payload.has("name")
+    "location" -> payload.has("label")
+    "milestone" -> payload.has("date", "label") || !bodyMd.isNullOrBlank()
+    else -> true
+  }
+  return if (ok) emptyList()
+  else listOf("block $type: `payload` is present but missing its core field — see apps/cli/templates/README.md")
 }
 
 private fun variantKey(p: BriefingCardPayload): String? = when {

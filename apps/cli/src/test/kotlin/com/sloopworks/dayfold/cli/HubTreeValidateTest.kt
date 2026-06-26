@@ -34,6 +34,29 @@ class HubTreeValidateTest {
     bad(validateHubTree("hubs", """{not json"""), "invalid hubs JSON")
   }
 
+  @Test fun `a payload present must carry its core field (ADR 0035 Option C)`() {
+    // checklist needs a non-empty items array
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"checklist","payload":{"items":[{"text":"Submit FAFSA"}]}}"""))
+    bad(validateHubTree("blocks", """{"sectionId":"s1","type":"checklist","payload":{"items":[]}}"""), "checklist")
+    // contact needs a name; link needs a url
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"contact","payload":{"name":"Admissions"}}"""))
+    bad(validateHubTree("blocks", """{"sectionId":"s1","type":"contact","payload":{"phone":"888"}}"""), "contact")
+    bad(validateHubTree("blocks", """{"sectionId":"s1","type":"link","payload":{"label":"portal"}}"""), "link")
+  }
+
+  @Test fun `validation is tolerant of BOTH schema and client field names (no side picked yet)`() {
+    // document: schema `ref` AND client `docRef` both accepted; location label; budget items OR total/spent
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"document","payload":{"ref":"url://x"}}"""))
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"document","payload":{"docRef":"url://x"}}"""))
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"budget","payload":{"items":[{"label":"Tuition","amount":100}]}}"""))
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"budget","payload":{"total":1000,"spent":250}}"""))
+  }
+
+  @Test fun `a block with no payload is unaffected (body_md or placeholder, hash113)`() {
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"contact","body_md":"**Admissions** 888-940-8100"}"""))
+    ok(validateHubTree("blocks", """{"sectionId":"s1","type":"checklist","ord":0}"""))   // no payload, no body — placeholder
+  }
+
   // The block-type + hub-status accept-lists are DERIVED from the generated schema
   // enums (Content.kt). This locks that derivation: every value the schema declares
   // must validate. If the schema adds/removes a value, this passes automatically —

@@ -2,10 +2,24 @@
 
 ## Status
 
-**Accepted** 2026-06-26 (operator: "I accept 0035, 0033"). Implementation (align
-`content.schema.json` to the client render model + regenerate `Content.kt` + add
-block-payload validation in the CLI `validateHubTree` and the server) follows in its
-own PR.
+**Accepted** 2026-06-26 (operator: "I accept 0035, 0033").
+
+**Implementation refinement → Option C (2026-06-26, operator-confirmed).** Building
+it surfaced three facts the Proposed ADR did not account for: (a) there is **no
+Kotlin codegen** yet (`codegen.mjs` emits TS only), so `Content.kt` can't be
+regenerated; (b) `content.schema.json` is declared **FROZEN for M0**; (c) the
+schema's per-type block payloads are **clean + well-designed**, and the renderer
+genuinely uses fields the schema lacks (`lat`/`lng` map, `total`/`spent` budget bar)
+— so the original Option A (edit schema → client) would break the freeze and degrade
+the design for **zero current benefit** (no structured-payload content exists yet).
+Adopt **Option C** instead: keep the frozen schema canonical; **add block-payload
+validation** (CLI + server) that is *tolerant of both* the schema and current
+client-render field names; make the renderer read the canonical names alongside its
+current ones; document the schema as canonical. The single-representation unification
+(rename client → schema, decide the location/budget representations, build Kotlin
+codegen) is deferred to **M1** — tracked in `OQ-block-payload-schema`. Delivered in
+steps: **CLI `validateHubTree` block-payload pre-check (this PR)** → server validation
+→ renderer tolerance → authoring-doc update.
 
 Originally **Proposed** 2026-06-26 (agent-drafted from the authoring-doc audit behind
 PR #134 / `OQ-block-payload-schema`; **operator-gated** — it changes the content
