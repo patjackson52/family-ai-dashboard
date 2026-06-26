@@ -28,6 +28,15 @@ class FeedScreenTest {
   }
 
   @Test
+  fun cardBodyRendersMarkdownNotRawSyntax() = runComposeUiTest {
+    // a CLI-authored card body with **bold** must show "Reply by Thursday",
+    // not the literal "**Reply**" (feed now uses the same renderer as hub blocks).
+    val state = AppState(cards = listOf(Card("c1", title = "School email", bodyMd = "**Reply** by Thursday")))
+    setContent { MaterialTheme { FeedScreen(state) } }
+    onNodeWithText("Reply by Thursday").assertIsDisplayed()   // markers stripped, run bolded
+  }
+
+  @Test
   fun accountAvatarExposesAnAccessibleLabel() = runComposeUiTest {
     // the monogram avatar is icon-only → screen readers must hear "Account", not "Y"
     setContent { MaterialTheme { FeedScreen(AppState(cards = listOf(Card("c1", title = "X")))) } }
