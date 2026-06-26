@@ -128,7 +128,24 @@ Reads the bundled allowed-host + curated-icon constants (no guessing) → source
 ## Out of scope
 Auto-resolution of entity→logo; multi-color palettes / full HCT at MVP; per-card hero parity with Hubs; CLI image editing; per-locale assets.
 
-## Open items (resolve at implementation)
-- Final curated icon list (~12–20) + render mechanism (drawn vs small bundled vectors).
-- Confirm Coil3 KMP version + iOS/Web engine parity.
-- Phase-2 `assets` table final shape + srcset strategy.
+## Open items
+- ~~Final curated icon list + render mechanism.~~ **RESOLVED:** 18 curated NAMES
+  (school…list) → `material-icons-extended` ImageVectors via `CuratedIcons` (no icon
+  font); unknown name → fallback tile. Binary tree-shaken on release.
+- ~~Confirm Coil3 KMP version + engine parity.~~ **RESOLVED:** `coil3:3.2.0` +
+  `coil-network-ktor3` over the project's ktor 3.5.0 (cio desktop / okhttp android /
+  darwin iOS); `SingletonImageLoader` wired in `CoilSetup`. Desktop + Android compile;
+  iOS target inherits commonMain (build pending the Xcode shell, as ever).
+- Phase-2 `assets` table final shape + srcset strategy (deferred).
+
+### Implementation deferrals (Phase-1 build, 2026-06-26)
+- **Block media server round-trip** waits on **ADR 0035** (generated `Block.payload`
+  is `[z.any()×7]` → any structured block PUT 422s today; live content is body_md-only).
+  Block media is enforced + rendered at the CLI + client now; the API route wiring is
+  forward-compatible.
+- **Typed-card media** (`TypedCardItem`/`BaseCard`) not yet wired — only the legacy
+  `CardItem` path carries card media. Follow-up.
+- **Hero** = height-capped banner with scrim (not the full scroll-collapse
+  `LargeTopAppBar` animation). Follow-up.
+- **ETag `diskCacheKey`** not wired (no ETag/versioned URLs at MVP) — Coil default cache.
+- **RTL** relies on Compose's automatic `Row` mirroring; no dedicated RTL snapshot.

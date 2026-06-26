@@ -15,8 +15,8 @@ export async function upsertCard(familyId: string, id: string, b: any) {
     `INSERT INTO briefing_cards
        (id, family_id, kind, title, body_md, target_hub_id, target_section_id,
         target_block_id, provenance, triggers, actions, not_before, expires_at,
-        type, payload, privacy, hub_ref, related, related_kicker, visibility, audience, version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,1)
+        type, payload, privacy, hub_ref, related, related_kicker, visibility, audience, media, version)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,1)
      ON CONFLICT (family_id, id) DO UPDATE SET
        kind=EXCLUDED.kind, title=EXCLUDED.title, body_md=EXCLUDED.body_md,
        target_hub_id=EXCLUDED.target_hub_id, target_section_id=EXCLUDED.target_section_id,
@@ -25,14 +25,14 @@ export async function upsertCard(familyId: string, id: string, b: any) {
        not_before=EXCLUDED.not_before, expires_at=EXCLUDED.expires_at,
        type=EXCLUDED.type, payload=EXCLUDED.payload, privacy=EXCLUDED.privacy,
        hub_ref=EXCLUDED.hub_ref, related=EXCLUDED.related, related_kicker=EXCLUDED.related_kicker,
-       visibility=EXCLUDED.visibility, audience=EXCLUDED.audience,
+       visibility=EXCLUDED.visibility, audience=EXCLUDED.audience, media=EXCLUDED.media,
        version=briefing_cards.version + 1, deleted_at=NULL
      RETURNING *`,
     [id, familyId, b.kind ?? "info", b.title, b.body_md ?? null,
      b.target?.hubId ?? null, b.target?.sectionId ?? null, b.target?.blockId ?? null,
      J(b.provenance), J(b.triggers), J(b.actions), b.not_before ?? null, b.expires_at ?? null,
      b.type ?? null, J(b.payload), J(b.privacy), b.hubRef ?? null, J(b.related), b.relatedKicker ?? null,
-     visibility, audience],
+     visibility, audience, J(b.media)],
   );
   return r.rows[0];
 }

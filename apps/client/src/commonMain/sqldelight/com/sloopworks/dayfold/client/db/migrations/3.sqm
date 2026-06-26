@@ -1,0 +1,5 @@
+-- Migration v3→v4 (ADR 0036): visual enrichment. Add the `media` JSON column to
+-- the card + hub cache tables. Block media rides the existing hub_block.payload
+-- JSON, so no DDL there. Additive; existing rows get NULL media (= unenriched).
+ALTER TABLE card ADD COLUMN media TEXT;
+ALTER TABLE hub ADD COLUMN media TEXT;

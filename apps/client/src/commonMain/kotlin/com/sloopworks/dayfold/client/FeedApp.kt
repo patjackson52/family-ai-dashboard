@@ -77,6 +77,10 @@ fun FeedApp(
   onCloseHub: () -> Unit = {},          // detail → list: cancel the DB tree subscription (HubEngine.closeHub)
   onLoadAudience: (String) -> Unit = {},// "who can see" sheet → load the audience (HubEngine.loadAudience)
 ) {
+  // ADR 0036: one-time Coil image-loader setup (Ktor network fetcher + crossfade).
+  // Idempotent; runs before the first AsyncImage composes. URLs are still gated by
+  // MediaValidation before Coil sees them.
+  remember { setupImageLoader(); 0 }
   val state by store.selectorState { it }
   // One stable handler (remembered so feed/detail stay skippable): OpenDetail is
   // in-app nav → dispatched to the store; every other CardAction is an OS handoff

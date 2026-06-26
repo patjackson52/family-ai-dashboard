@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -134,15 +136,22 @@ private fun RefreshErrorBanner(onRefresh: () -> Unit) {
 
 @Composable
 private fun CardItem(card: Card) {
+  val m = card.media
   ElevatedCard(Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      // kind chip (info = none)
-      kindLabel(card.kind)?.let { label ->
-        Text(
-          label.uppercase(),
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.primary,
-        )
+    Row(Modifier.padding(16.dp)) {
+      // ADR 0036: optional leading thumbnail (image → icon+accent tile fallback).
+      if (m?.thumbnailUrl != null) {
+        EnrichedThumbnail(m.thumbnailUrl, m.imageFit, m.icon, m.accentColor, m.imageAlt, size = 60.dp, corner = 16.dp)
+        Spacer(Modifier.width(14.dp))
+      }
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      // kind chip: accent chip (icon + derived accent) when enriched, else the
+      // existing plain label (info = none). accentColor never touches body text.
+      val label = kindLabel(card.kind)
+      if (m?.accentColor != null || m?.icon != null) {
+        AccentKindChip((label ?: card.kind).uppercase(), m.icon, m.accentColor)
+      } else label?.let {
+        Text(it.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
       }
       // countdown → emphasized title; others → titleMedium
       Text(
@@ -164,6 +173,7 @@ private fun CardItem(card: Card) {
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
       }
-    }
+      }   // Column
+    }     // Row
   }
 }

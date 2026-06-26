@@ -81,6 +81,20 @@ data class ActionElement (
 data class BlockPayload (
     val label: String? = null,
     val source: String? = null,
+
+    /**
+     * a11y alt for thumbnailUrl
+     */
+    val thumbnailAlt: String? = null,
+
+    /**
+     * link preview image; https + allowlisted host (ADR 0036)
+     *
+     * document preview image; https + allowlisted host (ADR 0036)
+     */
+    @SerialName("thumbnailUrl")
+    val thumbnailURL: String? = null,
+
     val url: String? = null,
     val items: List<Item>? = null,
     val kind: String? = null,
@@ -91,6 +105,18 @@ data class BlockPayload (
     val ref: String? = null,
 
     val date: String? = null,
+
+    /**
+     * decorative-only accent seed (ADR 0036)
+     */
+    val accentColor: String? = null,
+
+    /**
+     * contact avatar photo; https + allowlisted host (ADR 0036); falls back to initials
+     */
+    @SerialName("avatarUrl")
+    val avatarURL: String? = null,
+
     val email: String? = null,
     val name: String? = null,
     val phone: String? = null,
@@ -218,6 +244,12 @@ data class BriefingCard (
     val id: String,
     val kind: BriefingCardKind,
 
+    /**
+     * card visual enrichment (ADR 0036; all optional). icon+accent on the kind chip + optional
+     * leading thumbnail. Same shared URL/host/icon/hex validation as Hub.media.
+     */
+    val media: BriefingCardMedia? = null,
+
     @SerialName("not_before")
     val notBefore: String? = null,
 
@@ -270,6 +302,45 @@ enum class BriefingCardKind(val value: String) {
     @SerialName("countdown") Countdown("countdown"),
     @SerialName("info") Info("info"),
     @SerialName("weather") Weather("weather");
+}
+
+/**
+ * card visual enrichment (ADR 0036; all optional). icon+accent on the kind chip + optional
+ * leading thumbnail. Same shared URL/host/icon/hex validation as Hub.media.
+ */
+@Serializable
+data class BriefingCardMedia (
+    /**
+     * decorative-only accent seed; never body text. Lowercased on write.
+     */
+    val accentColor: String? = null,
+
+    /**
+     * curated icon NAME (server-validated); unknown → fallback.
+     */
+    val icon: String? = null,
+
+    /**
+     * a11y alt for thumbnailUrl.
+     */
+    val imageAlt: String? = null,
+
+    val imageFit: Fit? = null,
+
+    /**
+     * optional leading thumbnail; https + allowlisted host.
+     */
+    @SerialName("thumbnailUrl")
+    val thumbnailURL: String? = null
+)
+
+/**
+ * cover=photo edge-to-edge crop; contain=logo letterboxed on accent tint.
+ */
+@Serializable
+enum class Fit(val value: String) {
+    @SerialName("contain") Contain("contain"),
+    @SerialName("cover") Cover("cover");
 }
 
 /**
@@ -484,6 +555,14 @@ data class Hub (
     val endAt: String? = null,
 
     val id: String,
+
+    /**
+     * visual enrichment (ADR 0036; all optional, absent = unenriched/today's look). URLs are
+     * https + allowlisted-host (ADR 0036 shared validator); icon ∈ curated set; accentColor is
+     * decorative-only.
+     */
+    val media: HubMedia? = null,
+
     val sections: List<WrapperSchema>? = null,
 
     @SerialName("start_at")
@@ -503,6 +582,48 @@ data class Hub (
     val type: String,
 
     val version: Long? = null
+)
+
+/**
+ * visual enrichment (ADR 0036; all optional, absent = unenriched/today's look). URLs are
+ * https + allowlisted-host (ADR 0036 shared validator); icon ∈ curated set; accentColor is
+ * decorative-only.
+ */
+@Serializable
+data class HubMedia (
+    /**
+     * decorative-only accent seed (edge/tile/chip/scrim); never body text (WCAG 1.4.1).
+     * Lowercased on write.
+     */
+    val accentColor: String? = null,
+
+    /**
+     * cover=photo edge-to-edge crop; contain=logo letterboxed on accent tint.
+     */
+    val heroFit: Fit? = null,
+
+    /**
+     * hero image (Hub detail header + list-row fallback). https + allowlisted host.
+     */
+    @SerialName("heroUrl")
+    val heroURL: String? = null,
+
+    /**
+     * curated icon NAME, server-validated vs the bundled set (ADR 0036); unknown → fallback
+     * tile.
+     */
+    val icon: String? = null,
+
+    /**
+     * a11y alt → contentDescription (else derived from title).
+     */
+    val imageAlt: String? = null,
+
+    /**
+     * list-row 1:1 thumbnail; absent → falls back to heroUrl client-side.
+     */
+    @SerialName("thumbnailUrl")
+    val thumbnailURL: String? = null
 )
 
 @Serializable

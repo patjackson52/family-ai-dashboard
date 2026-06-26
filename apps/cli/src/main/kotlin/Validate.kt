@@ -58,7 +58,27 @@ fun validateCard(assertType: String?, json: String): List<String> {
   if (assertType != null && type != assertType) {
     errors += "--type $assertType, but the card's type is ${type ?: "(none)"}"
   }
+
+  // ADR 0036 — card.media (icon/accent/thumbnail). Mirrors the server gate.
+  card.media?.let { m ->
+    m.thumbnailURL?.let { MediaValidation.imageUrlError(it)?.let { e -> errors += "media.thumbnailUrl: $e" } }
+    m.icon?.let { MediaValidation.iconError(it)?.let { e -> errors += "media.icon: $e" } }
+    m.accentColor?.let { MediaValidation.accentHexError(it)?.let { e -> errors += "media.accentColor: $e" } }
+  }
   return errors
+}
+
+// ADR 0036 — validate a media/payload JsonObject's image fields (hub + block paths,
+// which are JSON-structural rather than typed-decoded). [keys] = the url fields to
+// host-check; icon/accentColor are checked when present.
+private fun mediaJsonErrors(prefix: String, obj: JsonObject?, urlKeys: List<String>): List<String> {
+  if (obj == null) return emptyList()
+  val e = mutableListOf<String>()
+  fun s(k: String) = (obj[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
+  for (k in urlKeys) s(k)?.let { MediaValidation.imageUrlError(it)?.let { msg -> e += "$prefix.$k: $msg" } }
+  s("icon")?.let { MediaValidation.iconError(it)?.let { msg -> e += "$prefix.icon: $msg" } }
+  s("accentColor")?.let { MediaValidation.accentHexError(it)?.let { msg -> e += "$prefix.accentColor: $msg" } }
+  return e
 }
 
 // The hub `type` is a free `string` server-side (ADR 0004/0006: "app-validated",
@@ -95,6 +115,8 @@ fun validateHubTree(resource: String, json: String): List<String> {
         !in HUB_CATALOG -> e += "hub: type \"$t\" is not a catalog key (${HUB_CATALOG.joinToString("|")})"
       }
       str("status")?.let { if (it !in HUB_STATUS) e += "hub: status \"$it\" must be ${HUB_STATUS.joinToString("|")}" }
+      // ADR 0036 — Hub.media (heroUrl/thumbnailUrl/icon/accentColor).
+      e += mediaJsonErrors("media", obj["media"] as? JsonObject, listOf("heroUrl", "thumbnailUrl"))
     }
     "sections" -> if (str("hubId").isNullOrBlank()) e += "section: `hubId` is required"
     "blocks" -> {
@@ -103,7 +125,15 @@ fun validateHubTree(resource: String, json: String): List<String> {
       when (t) {
         null -> e += "block: `type` is required"
         !in BLOCK_TYPES -> e += "block: type \"$t\" must be one of ${BLOCK_TYPES.joinToString("|")}"
-        else -> e += blockPayloadErrors(t, obj["payload"] as? JsonObject, str("body_md"))
+        else -> {
+          e += blockPayloadErrors(t, obj["payload"] as? JsonObject, str("body_md"))
+          // ADR 0036 — block media rides the payload: link/document thumbnailUrl,
+          // contact avatarUrl + accentColor.
+          when (t) {
+            "link", "document" -> e += mediaJsonErrors("payload", obj["payload"] as? JsonObject, listOf("thumbnailUrl"))
+            "contact" -> e += mediaJsonErrors("payload", obj["payload"] as? JsonObject, listOf("avatarUrl"))
+          }
+        }
       }
     }
   }

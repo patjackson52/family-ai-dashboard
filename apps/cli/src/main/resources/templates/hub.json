@@ -1,7 +1,15 @@
 {
-  "type": "party-event",
-  "title": "Maya's birthday",
+  "type": "starting-college",
+  "title": "Maya starts college",
   "status": "planning",
-  "countdown_to": "2026-07-15T15:00:00Z",
-  "visibility": "family"
+  "countdown_to": "2026-08-24T15:00:00Z",
+  "visibility": "family",
+  "media": {
+    "heroUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0c/EXAMPLE_logo.png",
+    "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0c/EXAMPLE_logo.png",
+    "heroFit": "contain",
+    "imageAlt": "Northridge University logo",
+    "icon": "school",
+    "accentColor": "#2C3E73"
+  }
 }

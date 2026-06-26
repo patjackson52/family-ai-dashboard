@@ -46,6 +46,31 @@ Hubs phone surface (INB-15/16) + content adaptive two-pane (INB-20) + the ADR-00
 visibility delta (`Hubs-Visibility.dc.html`, signed off) are all in; the content-
 API enforcement is built (PRs #34/#35). Hub render is build-ready.
 
+## Hub & card visual enrichment (ADR 0036) — BUILT on `claude/hub-card-enrichment`
+
+**Status (2026-06-26): implemented + green; not yet committed/PR'd (awaiting operator).**
+Hi-fi design imported to `designs/hub-card-enrichment/` (operator signed off as-is,
+ADR 0008) + **ADR 0036 accepted** (Wikimedia-only image allowlist, hardened shared
+validator). Delivered end-to-end:
+- **Schema+codegen:** `Hub.media`/`BriefingCard.media` + block link/document
+  `thumbnailUrl`(+alt) + contact `avatarUrl`/`accentColor`; Zod + Kotlin regen.
+- **Migration `0012_visual_enrichment.sql`** (media jsonb + typeof CHECK on hubs+cards);
+  client SQLDelight v3→v4 (`3.sqm`, media column on card+hub; block media rides payload).
+- **Shared hardened validator** (https-only, exact-host allowlist, reject
+  userinfo/punycode/alt-port/SVG, curated-icon enum, #RRGGBB) in **3 lock-step copies**:
+  API `media-validation.ts` (Zod-refine layer on the PUT path), CLI `MediaValidation.kt`
+  (wired into `Validate`), client `MediaValidation.kt` (Coil load guard).
+- **Coil3 render** (HubRow leading tile, collapsing-capped hero banner, card icon+accent
+  kind-chip + thumb, contact avatar→initials, link/doc thumb) with the
+  **image→icon+accent-tile→default fallback ladder**; accent harmonized (decorative only).
+- **Tests green:** API 244 (media round-trip + 422 evasion + sync carries media);
+  CLI + client kotlin-test (URL/hex/icon accept-reject incl. evasion vectors); 7 Compose
+  snapshots (fallback rung × light/dark × hero). Desktop + Android targets compile.
+- **Deferred (noted):** structured *block* media round-trips server-side only after
+  **ADR 0035** (block-payload reconciliation; live content is body_md-only today);
+  typed-card (`TypedCardItem`) media + full scroll-collapse hero + ETag disk-cache-key +
+  RTL snapshot = follow-ups; **Phase 2** (self-host/CDN, SSRF-guarded ingest, full HCT) deferred.
+
 ## Operator actions pending
 
 - [x] **DONE 2026-06-26 — prod DB schema synced + auth env configured (agent, under

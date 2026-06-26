@@ -48,11 +48,16 @@ class ContentStore(driver: SqlDriver) {
           c.targetHubId, c.targetSectionId, c.targetBlockId,   // deep-link target (was dropped)
           c.related?.let { json.encodeToString(RELATED_SER, it) },
           c.relatedKicker,
+          c.media?.let { json.encodeToString(CardMedia.serializer(), it) },   // ADR 0036
           nowIso,
         )
       }
       changedHubs.forEach { h ->
-        q.upsertHub(h.id, h.type, h.title, h.status, h.startAt, h.endAt, h.countdownTo, h.visibility, h.createdBy, nowIso)
+        q.upsertHub(
+          h.id, h.type, h.title, h.status, h.startAt, h.endAt, h.countdownTo, h.visibility, h.createdBy,
+          h.media?.let { json.encodeToString(HubMedia.serializer(), it) },     // ADR 0036
+          nowIso,
+        )
       }
       changedSections.forEach { s ->
         q.upsertSection(s.id, s.hubId ?: "", s.title, s.ord, nowIso)
@@ -86,12 +91,14 @@ class ContentStore(driver: SqlDriver) {
     payload = decode(row.payload, Payload.serializer()),
     privacy = decode(row.privacy, CardPrivacy.serializer()),
     related = decode(row.related, RELATED_SER), relatedKicker = row.related_kicker,
+    media = decode(row.media, CardMedia.serializer()),   // ADR 0036
   )
 
   private fun rowToHub(r: com.sloopworks.dayfold.client.db.ActiveHubs): Hub = Hub(
     id = r.id, type = r.type, title = r.title, status = r.status ?: "active",
     startAt = r.start_at, endAt = r.end_at, countdownTo = r.countdown_to,
     visibility = r.visibility ?: "family", createdBy = r.created_by,
+    media = decode(r.media, HubMedia.serializer()),   // ADR 0036
   )
 
   private fun rowToSection(r: com.sloopworks.dayfold.client.db.SectionsForHub): HubSection =

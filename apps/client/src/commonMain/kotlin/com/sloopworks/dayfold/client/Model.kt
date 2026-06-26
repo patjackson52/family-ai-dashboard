@@ -35,6 +35,17 @@ data class Card(
   // (like target_*/hub_ref). `related` jsonb decodes verbatim (edge keys are camel).
   val related: List<RelatedRef>? = null,
   @SerialName("related_kicker") val relatedKicker: String? = null,
+  val media: CardMedia? = null,                              // ADR 0036 visual enrichment
+)
+
+// ADR 0036 — card visual enrichment (icon + accent on the kind chip + optional thumb).
+@Serializable
+data class CardMedia(
+  val icon: String? = null,           // curated NAME → glyph via CuratedIcons
+  val accentColor: String? = null,    // #RRGGBB decorative seed
+  val thumbnailUrl: String? = null,
+  val imageAlt: String? = null,
+  val imageFit: String? = null,       // cover | contain
 )
 
 // A cross-link to another card in THIS family (CL-8). targetId resolves
@@ -144,6 +155,20 @@ data class Hub(
   @SerialName("countdown_to") val countdownTo: String? = null,
   val visibility: String = "family",                        // family | restricted (ADR 0030)
   @SerialName("created_by") val createdBy: String? = null,  // resolved author user id (null = legacy token)
+  val media: HubMedia? = null,                              // ADR 0036 visual enrichment (null = unenriched)
+)
+
+// ADR 0036 — hub visual enrichment. URLs are https + host-allowlisted (validated
+// server-side + by MediaValidation before any Coil load); icon ∈ curated set;
+// accentColor is a decorative SEED (harmonized by AccentRoles), never body text.
+@Serializable
+data class HubMedia(
+  val heroUrl: String? = null,
+  val thumbnailUrl: String? = null,
+  val heroFit: String? = null,        // cover | contain
+  val imageAlt: String? = null,
+  val icon: String? = null,           // curated NAME → glyph via CuratedIcons
+  val accentColor: String? = null,    // #RRGGBB decorative seed
 )
 
 @Serializable
@@ -177,6 +202,9 @@ data class BlockPayload(
   val address: String? = null, val lat: Double? = null, val lng: Double? = null, val mapUrl: String? = null,    // location (mapUrl = schema name)
   val date: String? = null,                                 // milestone
   val total: Double? = null, val spent: Double? = null,     // budget summary (client) — or derived from `items` (schema)
+  // ADR 0036 block media: link/document preview thumbnail, contact avatar + accent.
+  val thumbnailUrl: String? = null, val thumbnailAlt: String? = null,
+  val avatarUrl: String? = null, val accentColor: String? = null,
 )
 
 @Serializable

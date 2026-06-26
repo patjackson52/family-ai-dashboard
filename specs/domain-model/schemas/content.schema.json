@@ -42,11 +42,11 @@
       "additionalProperties": false
     },
 
-    "LinkPayload":     { "type": "object", "required": ["url"], "properties": { "url": { "type": "string", "format": "uri" }, "label": { "type": "string" }, "source": { "type": "string" } }, "additionalProperties": false },
+    "LinkPayload":     { "type": "object", "required": ["url"], "properties": { "url": { "type": "string", "format": "uri" }, "label": { "type": "string" }, "source": { "type": "string" }, "thumbnailUrl": { "type": "string", "format": "uri", "maxLength": 2048, "description": "link preview image; https + allowlisted host (ADR 0036)" }, "thumbnailAlt": { "type": "string", "maxLength": 256, "description": "a11y alt for thumbnailUrl" } }, "additionalProperties": false },
     "ChecklistPayload":{ "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" }, "done": { "type": "boolean", "default": false }, "due": { "$ref": "#/$defs/timestamp" }, "assignee": { "type": "string" } }, "additionalProperties": false } } }, "additionalProperties": false },
-    "DocumentPayload": { "type": "object", "required": ["ref"], "properties": { "ref": { "type": "string", "description": "url | fileRef (links+small refs at MVP)" }, "label": { "type": "string" }, "kind": { "type": "string" } }, "additionalProperties": false },
+    "DocumentPayload": { "type": "object", "required": ["ref"], "properties": { "ref": { "type": "string", "description": "url | fileRef (links+small refs at MVP)" }, "label": { "type": "string" }, "kind": { "type": "string" }, "thumbnailUrl": { "type": "string", "format": "uri", "maxLength": 2048, "description": "document preview image; https + allowlisted host (ADR 0036)" }, "thumbnailAlt": { "type": "string", "maxLength": 256, "description": "a11y alt for thumbnailUrl" } }, "additionalProperties": false },
     "MilestonePayload":{ "type": "object", "required": ["date", "label"], "properties": { "date": { "$ref": "#/$defs/timestamp" }, "label": { "type": "string" } }, "additionalProperties": false },
-    "ContactPayload":  { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "role": { "type": "string" }, "phone": { "type": "string" }, "email": { "type": "string" } }, "additionalProperties": false },
+    "ContactPayload":  { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "role": { "type": "string" }, "phone": { "type": "string" }, "email": { "type": "string" }, "avatarUrl": { "type": "string", "format": "uri", "maxLength": 2048, "description": "contact avatar photo; https + allowlisted host (ADR 0036); falls back to initials" }, "accentColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "decorative-only accent seed (ADR 0036)" } }, "additionalProperties": false },
     "LocationPayload": { "type": "object", "required": ["label"], "properties": { "label": { "type": "string" }, "address": { "type": "string" }, "mapUrl": { "type": "string" } }, "additionalProperties": false },
     "BudgetPayload":   { "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "type": "object", "required": ["label", "amount"], "properties": { "label": { "type": "string" }, "amount": { "type": "number" }, "paid": { "type": "boolean", "default": false } }, "additionalProperties": false } } }, "additionalProperties": false },
 
@@ -92,7 +92,20 @@
         "status": { "enum": ["planning", "active", "archived"], "default": "active" },
         "start_at": { "$ref": "#/$defs/timestamp" }, "end_at": { "$ref": "#/$defs/timestamp" }, "countdown_to": { "$ref": "#/$defs/timestamp" },
         "version": { "$ref": "#/$defs/version" },
-        "sections": { "type": "array", "items": { "$ref": "#/$defs/Section" } }
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/Section" } },
+        "media": {
+          "description": "visual enrichment (ADR 0036; all optional, absent = unenriched/today's look). URLs are https + allowlisted-host (ADR 0036 shared validator); icon ∈ curated set; accentColor is decorative-only.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "heroUrl": { "type": "string", "format": "uri", "maxLength": 2048, "description": "hero image (Hub detail header + list-row fallback). https + allowlisted host." },
+            "thumbnailUrl": { "type": "string", "format": "uri", "maxLength": 2048, "description": "list-row 1:1 thumbnail; absent → falls back to heroUrl client-side." },
+            "heroFit": { "enum": ["cover", "contain"], "description": "cover=photo edge-to-edge crop; contain=logo letterboxed on accent tint." },
+            "imageAlt": { "type": "string", "maxLength": 256, "description": "a11y alt → contentDescription (else derived from title)." },
+            "icon": { "type": "string", "maxLength": 40, "description": "curated icon NAME, server-validated vs the bundled set (ADR 0036); unknown → fallback tile." },
+            "accentColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "decorative-only accent seed (edge/tile/chip/scrim); never body text (WCAG 1.4.1). Lowercased on write." }
+          }
+        }
       },
       "additionalProperties": false
     },
@@ -114,6 +127,18 @@
         "version": { "$ref": "#/$defs/version" }, "provenance": { "$ref": "#/$defs/Provenance" },
 
         "type": { "enum": ["file", "link", "invite", "contact", "geo", "email"], "description": "content type (ADR 0022 D1) — drives the Now-card / detail layout. OPTIONAL for back-compat with kind-only M0 cards." },
+        "media": {
+          "description": "card visual enrichment (ADR 0036; all optional). icon+accent on the kind chip + optional leading thumbnail. Same shared URL/host/icon/hex validation as Hub.media.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "icon": { "type": "string", "maxLength": 40, "description": "curated icon NAME (server-validated); unknown → fallback." },
+            "accentColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "decorative-only accent seed; never body text. Lowercased on write." },
+            "thumbnailUrl": { "type": "string", "format": "uri", "maxLength": 2048, "description": "optional leading thumbnail; https + allowlisted host." },
+            "imageAlt": { "type": "string", "maxLength": 256, "description": "a11y alt for thumbnailUrl." },
+            "imageFit": { "enum": ["cover", "contain"] }
+          }
+        },
         "hubRef": { "type": "string", "description": "parent Hub id — the adaptive supporting pane's 'PART OF THIS HUB' (ADR 0022; CL-10). Optional." },
         "relatedKicker": { "type": "string", "description": "section header for the RELATED rows (e.g. 'FROM THE SAME EMAIL'). CL-8." },
         "related": { "type": "array", "description": "cross-links to other cards in THIS family (CL-8). targetId resolves client-side vs the local cache; title/sub are author-denormalized so a row renders without resolving. Same-tenant only (rides authorizeTenant).",

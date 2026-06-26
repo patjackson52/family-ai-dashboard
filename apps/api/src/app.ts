@@ -6,6 +6,7 @@ import { q, pool } from "./db.ts";
 import { stripServerManaged, stampProvenance, constantTimeEqual } from "./security.ts";
 import { BriefingCardSchema } from "./generated/content.ts";
 import { crossValidateCard, blockPayloadIssues } from "./content-validation.ts";
+import { validateHubMedia, validateCardMedia, validateBlockPayloadMedia, normalizedAccent } from "./media-validation.ts";
 import * as repo from "./repo.ts";
 // Auth imports are lazy (dynamic) so that api.test.ts (no AUTH_* env) can still
 // load app.ts without triggering the module-level env-guard throws in tokens.ts.
@@ -372,6 +373,12 @@ app.put("/families/:fid/cards/:id", async (c) => {
   // CL-2: type↔payload cross-check (zod validates the two independently).
   const cross = crossValidateCard(parsed.data as any);
   if (cross.length) return c.json({ type: "validation", issues: cross }, 422);
+  // ADR 0036: hardened image-URL + curated-icon + accent validation on card.media
+  // (host allowlist / SVG / curated-icon are NOT expressible in zod).
+  const media = (parsed.data as any).media;
+  const mediaIssues = validateCardMedia(media);
+  if (mediaIssues.length) return c.json({ type: "validation", issues: mediaIssues }, 422);
+  if (media?.accentColor) media.accentColor = normalizedAccent(media.accentColor);  // lowercase on write
   return c.json(await repo.upsertCard(fid, id, { ...parsed.data, visibility, audience }), 200);
 });
 
@@ -492,6 +499,10 @@ app.put("/families/:fid/hubs/:id", async (c) => {
   const { visibility: _v, audience: _a, ...rest } = raw;
   const parsed = HubSchema.safeParse({ ...rest, id });
   if (!parsed.success) return c.json({ type: "validation", issues: parsed.error.issues }, 422);
+  // ADR 0036: hardened image-URL + curated-icon + accent validation.
+  const hubMediaIssues = validateHubMedia((parsed.data as any).media);
+  if (hubMediaIssues.length) return c.json({ type: "validation", issues: hubMediaIssues }, 422);
+  { const m = (parsed.data as any).media; if (m?.accentColor) m.accentColor = normalizedAccent(m.accentColor); }
   const caller = { userId: a.userId, legacy: a.legacy };
   // ADR 0030 §6: only the author / an already-permitted member / legacy may rewrite
   // an existing hub's visibility. A fresh hub's author is the caller → allowed.
@@ -559,6 +570,11 @@ app.put("/families/:fid/blocks/:id", async (c) => {
   // BlockSchema.payload is z.any() (codegen stub) — validate the payload here (ADR 0035).
   const payloadIssues = blockPayloadIssues(parsed.data);
   if (payloadIssues.length) return c.json({ type: "validation", issues: payloadIssues }, 422);
+  // ADR 0036: block image enrichment rides the payload (link/document thumbnailUrl,
+  // contact avatarUrl + accentColor). Same hardened rule.
+  const blockMediaIssues = validateBlockPayloadMedia((parsed.data as any).type, (parsed.data as any).payload);
+  if (blockMediaIssues.length) return c.json({ type: "validation", issues: blockMediaIssues }, 422);
+  { const p = (parsed.data as any).payload; if (p?.accentColor) p.accentColor = normalizedAccent(p.accentColor); }
   const row = await hubs.upsertBlock(fid, id, sectionId, parsed.data);
   return row ? c.json(row, 200) : c.json({ type: "conflict", detail: "parent section missing or deleted" }, 409);
 });

@@ -16,6 +16,7 @@ CREATE TABLE card (
   target_block_id   TEXT,
   related     TEXT,                       -- CL-8: JSON [{relation,targetId,targetType,title?,sub?}]
   related_kicker TEXT,                    -- CL-8: RELATED section header
+  media       TEXT,                       -- ADR 0036: JSON {icon,accentColor,thumbnailUrl,imageAlt,imageFit}
   updated_at  TEXT NOT NULL,
   deleted     INTEGER NOT NULL DEFAULT 0  -- tombstone flag
 );
@@ -32,14 +33,14 @@ CREATE TABLE sync_meta (
 );
 
 upsertCard:
-INSERT INTO card(id, kind, title, body_md, source, not_before, expires_at, type, payload, privacy, hub_ref, target_hub_id, target_section_id, target_block_id, related, related_kicker, updated_at, deleted)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+INSERT INTO card(id, kind, title, body_md, source, not_before, expires_at, type, payload, privacy, hub_ref, target_hub_id, target_section_id, target_block_id, related, related_kicker, media, updated_at, deleted)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 ON CONFLICT(id) DO UPDATE SET
   kind=excluded.kind, title=excluded.title, body_md=excluded.body_md,
   source=excluded.source, not_before=excluded.not_before, expires_at=excluded.expires_at,
   type=excluded.type, payload=excluded.payload, privacy=excluded.privacy, hub_ref=excluded.hub_ref,
   target_hub_id=excluded.target_hub_id, target_section_id=excluded.target_section_id, target_block_id=excluded.target_block_id,
-  related=excluded.related, related_kicker=excluded.related_kicker,
+  related=excluded.related, related_kicker=excluded.related_kicker, media=excluded.media,
   updated_at=excluded.updated_at, deleted=0;
 
 markDeleted:
@@ -47,7 +48,7 @@ UPDATE card SET deleted=1, updated_at=? WHERE id=?;
 
 -- feed query: live cards, not_before NULLS LAST then id (matches the API contract)
 activeCards:
-SELECT id, kind, title, body_md, source, not_before, expires_at, type, payload, privacy, hub_ref, target_hub_id, target_section_id, target_block_id, related, related_kicker
+SELECT id, kind, title, body_md, source, not_before, expires_at, type, payload, privacy, hub_ref, target_hub_id, target_section_id, target_block_id, related, related_kicker, media
 FROM card WHERE deleted=0
 ORDER BY (not_before IS NULL), not_before, id;
 
@@ -80,24 +81,25 @@ CREATE TABLE hub (
   countdown_to TEXT,
   visibility   TEXT,
   created_by   TEXT,
+  media        TEXT,                       -- ADR 0036: JSON {heroUrl,thumbnailUrl,heroFit,imageAlt,icon,accentColor}
   updated_at   TEXT NOT NULL,
   deleted      INTEGER NOT NULL DEFAULT 0
 );
 
 upsertHub:
-INSERT INTO hub(id, type, title, status, start_at, end_at, countdown_to, visibility, created_by, updated_at, deleted)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+INSERT INTO hub(id, type, title, status, start_at, end_at, countdown_to, visibility, created_by, media, updated_at, deleted)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 ON CONFLICT(id) DO UPDATE SET
   type=excluded.type, title=excluded.title, status=excluded.status,
   start_at=excluded.start_at, end_at=excluded.end_at, countdown_to=excluded.countdown_to,
-  visibility=excluded.visibility, created_by=excluded.created_by,
+  visibility=excluded.visibility, created_by=excluded.created_by, media=excluded.media,
   updated_at=excluded.updated_at, deleted=0;
 
 markHubDeleted:
 UPDATE hub SET deleted=1, updated_at=? WHERE id=?;
 
 activeHubs:
-SELECT id, type, title, status, start_at, end_at, countdown_to, visibility, created_by
+SELECT id, type, title, status, start_at, end_at, countdown_to, visibility, created_by, media
 FROM hub WHERE deleted=0 ORDER BY COALESCE(start_at, countdown_to), id;
 
 wipeHubs:

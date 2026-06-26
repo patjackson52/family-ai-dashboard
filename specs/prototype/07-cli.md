@@ -139,6 +139,38 @@ loops, the binary sources `FCK`/token per the headless rules above.
 - **`watch` mode** (if shipped): debounce, ignore editor temp/swap files,
   **never auto-`--replace`** (a half-saved file under full-replace = data loss).
 
+## Visual enrichment authoring (ADR 0036)
+
+Hubs and briefing cards carry an optional `media` object; blocks carry image
+fields on their existing `payload`. The CLI validates these locally before push
+(`MediaValidation`), mirroring the server gate — keep all three (server Zod, CLI,
+client) in lock-step.
+
+- **Hub.media** `{heroUrl, thumbnailUrl, heroFit:cover|contain, imageAlt, icon,
+  accentColor}` · **BriefingCard.media** `{icon, accentColor, thumbnailUrl,
+  imageAlt, imageFit}` · **block** link/document `payload.thumbnailUrl`(+`thumbnailAlt`),
+  contact `payload.avatarUrl`(+`accentColor`). All optional; absent = today's look.
+- **Image URLs (hardened, Phase 1):** `https` only, on the **host allowlist =
+  exactly `upload.wikimedia.org`** (exact host, not suffix); no userinfo, no
+  explicit non-443 port, **no SVG**, ≤2048 chars. Anything else → local validation
+  error (and a server 422). Grow the allowlist one operator-approved host at a time.
+- **`icon`** must be one of the curated 18 NAMES: `school, luggage, medical, move,
+  party, baby, calendar, location, link, document, contact, budget, travel, car,
+  food, pet, sport, list`. Unknown name → the client falls back to the accent tile.
+- **`accentColor`** = `#RRGGBB` (lowercased on write). Decorative surfaces only
+  (edge/tile/chip/scrim); never body text (WCAG 1.4.1).
+- **`heroFit`/`imageFit`**: `cover` for photos (edge-to-edge crop), `contain` for
+  logos/mascots (letterboxed on an accent tint).
+- **Templates:** `dayfold template hub` / `dayfold template block` emit `media`
+  examples. The constants live in the CLI's `MediaValidation` (bundled).
+- **Skill duty:** the authoring skill reads these constants (never guesses a host
+  or icon) and **surfaces the chosen hero/icon/accent to the operator for
+  confirmation before `push`** — the trademark / wrong-entity guard (ADR 0036).
+- **Note:** structured *block* payloads (incl. block media) only round-trip
+  through the server once ADR 0035 reconciles the block-payload schema; until then
+  block media is exercised by the CLI validator + client render (live content is
+  `body_md`-only). Hub + card media round-trip server-side today.
+
 ## Open questions
 - Manifest convention (one file per hub vs a tree) — settle with first dogfood.
 - `watch` auto-push vs explicit `push` — likely both, ties to AI-loop use.

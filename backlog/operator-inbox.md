@@ -9,6 +9,17 @@ Each item: question, context link, **proposed default**, urgency.
 
 ---
 
+- **INB-24 · ANSWERED 2026-06-26 → Hub/card visual-enrichment BUILD gates CLEARED.**
+  Operator (in-session): (1) **ADR 0008 hi-fi signoff = "Approve as-is"** on the
+  imported `designs/hub-card-enrichment/` mockup (Enrichment + Hub-Enrichment-Phone +
+  support.js) — clears the design-first gate for the enrichment surfaces. (2)
+  **ADR 0036 = "Accept — Wikimedia-only start"** → flipped Proposed→Accepted;
+  Phase-1 image-URL allowlist = exactly `upload.wikimedia.org`; hardened shared
+  validator (https-only, reject userinfo/punycode/alt-port/suffix/SVG) server+client+CLI;
+  client→third-party IP/usage leak accepted as explicitly-temporary (Phase 2 self-host
+  kills it). Build proceeds: schema+codegen → migration 0012 → validator → Coil3 render →
+  CLI/skill → tests. Spec: `specs/hub-card-visual-enrichment-design.md`.
+
 - **INB-23 · ANSWERED 2026-06-26 → ADR 0034 ACCEPTED.** Operator "inb 23 approved" →
   ADR 0034 flipped Proposed→Accepted; **G5 posture ratified** (all tracks→prod Vercel
   API, real sign-in AUTH-S3, never bake `HOUSEHOLD_SECRET`/`DEV_AUTH_SECRET`). The

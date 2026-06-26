@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -142,6 +143,16 @@ private fun HubRow(hub: Hub, onClick: () -> Unit) {
     shape = RoundedCornerShape(24.dp),
   ) {
     Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+      // ADR 0036: fixed 1:1 leading slot (image → icon+accent tile fallback). Shown
+      // only when enriched, so unenriched hubs keep their current look (no regression).
+      val media = hub.media
+      if (media.isEnriched()) {
+        EnrichedThumbnail(
+          imageUrl = media!!.thumbnailUrl ?: media.heroUrl, fit = media.heroFit, icon = media.icon,
+          accentHex = media.accentColor, alt = media.imageAlt, size = 56.dp, corner = 16.dp,
+        )
+        Spacer(Modifier.width(14.dp))
+      }
       Column(Modifier.weight(1f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
           Text(hub.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
@@ -162,9 +173,11 @@ private fun HubRow(hub: Hub, onClick: () -> Unit) {
           )
         }
       }
-      // right-aligned countdown (the "when" — core to event hubs)
+      // right-aligned countdown (the "when" — core to event hubs). Takes the hub's
+      // derived accent (decorative reinforcement) when enriched, else theme primary.
       if (count != null && hub.status != "archived") {
-        Text(count, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 10.dp))
+        val countColor = rememberAccentRoles(media?.accentColor)?.edge ?: MaterialTheme.colorScheme.primary
+        Text(count, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = countColor, modifier = Modifier.padding(start = 10.dp))
       }
     }
   }
@@ -226,6 +239,16 @@ fun HubDetailScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
       ) {
         item {
+          // ADR 0036: enriched hub gets a height-capped hero banner (image → icon+
+          // accent fallback) above the status row. Part of the first item so the
+          // deep-link scroll index math (focusedBlockItemIndex) is unaffected.
+          if (tree.hub.media.isEnriched()) {
+            EnrichedHeroBanner(
+              tree.hub.media, tree.hub.title,
+              hubWhenLabel(tree.hub.countdownTo, tree.hub.startAt, tree.hub.endAt, kotlin.time.Clock.System.now().toString()),
+              modifier = Modifier.padding(bottom = 14.dp),
+            )
+          }
           Row(verticalAlignment = Alignment.CenterVertically) {
             StatusChip(tree.hub.status)
             if (tree.hub.visibility == "restricted") {
@@ -475,7 +498,16 @@ private fun ChecklistRow(item: ChecklistItem) {
 private fun LinkRow(block: HubBlock) {
   val p = block.payload
   Row(verticalAlignment = Alignment.CenterVertically) {
-    IconTile(if (block.type == "document") DayfoldIcons.Document else DayfoldIcons.Link, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+    // ADR 0036: link/document preview thumbnail (image → icon-tile fallback).
+    if (p?.thumbnailUrl != null) {
+      EnrichedThumbnail(
+        imageUrl = p.thumbnailUrl, fit = "cover",
+        icon = if (block.type == "document") "document" else "link",
+        accentHex = p.accentColor, alt = p.thumbnailAlt, size = 48.dp, corner = 12.dp,
+      )
+    } else {
+      IconTile(if (block.type == "document") DayfoldIcons.Document else DayfoldIcons.Link, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+    }
     Column(Modifier.padding(horizontal = 13.dp).weight(1f)) {
       // document ref is the canonical schema name; docRef is the client alias (ADR 0035)
       val refStr = p?.docRef ?: p?.ref
@@ -489,10 +521,8 @@ private fun LinkRow(block: HubBlock) {
 @Composable
 private fun ContactRow(p: BlockPayload?) {
   Row(verticalAlignment = Alignment.CenterVertically) {
-    val initials = (p?.name ?: "?").split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }.take(2).joinToString("")
-    Box(Modifier.size(44.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-      Text(initials, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-    }
+    // ADR 0036: avatarUrl photo → initials fallback (invisible on miss).
+    ContactAvatar(p?.name, p?.avatarUrl)
     Column(Modifier.padding(horizontal = 13.dp).weight(1f)) {
       Text(p?.name ?: "Contact", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
       p?.role?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }

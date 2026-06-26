@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Figtree:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .msr { font-family: 'Material Symbols Rounded'; font-weight: normal; line-height: 1; white-space: nowrap; -webkit-font-smoothing: antialiased; }
+  .msr.fill { font-variation-settings: 'FILL' 1; }
+</style>
+</helmet>
+
+<div style="font-family:'Figtree',sans-serif;background:#F3E9E5;color:#271814;min-height:100vh;padding:56px 40px 110px;">
+  <div style="max-width:1200px;margin:0 auto;">
+
+    <!-- ===== MASTHEAD ===== -->
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:14px;flex-wrap:wrap;">
+      <div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+          <div style="width:44px;height:44px;border-radius:14px;position:relative;overflow:hidden;background:linear-gradient(143deg,#FF8A6E,#C0381E);box-shadow:0 4px 16px rgba(192,56,30,0.32);">
+            <div style="position:absolute;top:0;right:0;width:46%;height:46%;background:linear-gradient(225deg,#FFE2D8,#FFB4A3);clip-path:polygon(100% 0,100% 100%,0 0);"></div><div style="position:absolute;top:0;right:0;width:46%;height:46%;background:rgba(90,17,0,0.20);clip-path:polygon(0 0,100% 100%,0 100%);"></div>
+          </div>
+          <span style="font-family:'Outfit';font-weight:600;font-size:22px;letter-spacing:-0.01em;">Dayfold</span>
+          <span style="font-size:12px;font-weight:500;color:#5A423C;border:1px solid #D8C2BB;border-radius:999px;padding:4px 10px;">Hub &amp; card visual enrichment</span>
+        </div>
+        <h1 style="font-family:'Outfit';font-weight:600;font-size:52px;line-height:1.04;letter-spacing:-0.02em;margin:0;max-width:17ch;">Imagery &amp; color identity</h1>
+      </div>
+      <div style="font-size:14px;line-height:1.5;color:#5A423C;max-width:34ch;text-align:right;">
+        Material 3 Expressive · mobile-first · light + dark<br>
+        <span style="color:#8C726B;">Hero images, list thumbnails, a curated icon set and one safe accent per hub — so a family grasps a hub at a glance.</span>
+      </div>
+    </div>
+    <div style="height:1px;background:#D8C2BB;margin:28px 0 8px;"></div>
+    <nav style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:46px;">
+      <sc-for list="{{ toc }}" as="t" hint-placeholder-count="11">
+        <a href="{{ t.href }}" style="font-size:13px;font-weight:500;color:#7A2615;text-decoration:none;background:#FCEBE6;border:1px solid #EBD3CB;border-radius:999px;padding:7px 14px;">{{ t.label }}</a>
+      </sc-for>
+    </nav>
+
+    <!-- ===== THE PROBLEMS ===== -->
+    <section style="margin-bottom:60px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">00</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">What this solves</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 22px;">Four hard problems, designed as states</h2>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+        <sc-for list="{{ problems }}" as="p" hint-placeholder-count="4">
+          <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:22px;">
+            <span class="msr" style="font-size:26px;color:#C0381E;">{{ p.icon }}</span>
+            <div style="font-family:'Outfit';font-weight:600;font-size:16px;margin:12px 0 6px;">{{ p.title }}</div>
+            <div style="font-size:13px;line-height:1.5;color:#5A423C;">{{ p.body }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ===== A. HUB LIST ===== -->
+    <section id="list" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">A</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Hub list · HubListScreen / HubRow</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">One fixed 1:1 slot, every fit, zero layout shift</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">The same list mixes a <b>cover photo</b> (Lisbon), a <b>contain logo on accent tint</b> (Northridge), an <b>icon+accent tile</b> (no image), a <b>loading shimmer</b> (House move) and a <b>failed image that degrades to the icon tile</b> — indistinguishable from "no image". The slot never changes size, so nothing reflows as images resolve. A 3&nbsp;px accent left-edge carries identity; the countdown takes the accent.</p>
+      <div style="display:flex;gap:36px;flex-wrap:wrap;">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:12.5px;font-weight:600;color:#5A423C;display:flex;align-items:center;gap:6px;"><span class="msr" style="font-size:15px;">light_mode</span>Light</div>
+          <dc-import name="Hub-Enrichment-Phone" mode="light" view="list" hint-size="390px,844px"></dc-import>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:12.5px;font-weight:600;color:#5A423C;display:flex;align-items:center;gap:6px;"><span class="msr" style="font-size:15px;">dark_mode</span>Dark</div>
+          <dc-import name="Hub-Enrichment-Phone" mode="dark" view="list" hint-size="390px,844px"></dc-import>
+        </div>
+        <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:12px;">
+          <sc-for list="{{ rowTypes }}" as="r" hint-placeholder-count="5">
+            <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:18px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px;">
+              <span class="msr" style="font-size:20px;color:{{ r.color }};margin-top:1px;">{{ r.icon }}</span>
+              <div><div style="font-family:'Outfit';font-weight:600;font-size:14.5px;">{{ r.title }}</div><div style="font-size:12.5px;line-height:1.45;color:#5A423C;">{{ r.body }}</div></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FIT PROBLEM ===== -->
+    <section id="fit" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">01</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">The fit problem · heroFit</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">cover for photos, contain for logos</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">A wide wordmark, a square mascot and a landscape photo all arrive through one <code style="font-family:monospace;background:#FCEBE6;padding:1px 5px;border-radius:5px;font-size:12px;">heroUrl</code>. A blind cover-crop floats transparent PNGs on nothing and slices logos. <b>cover</b> fills edge-to-edge (photos); <b>contain</b> letterboxes the logo on an accent-tinted pad. Shown at both sizes.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">
+        <sc-for list="{{ fits }}" as="f" hint-placeholder-count="2">
+          <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:22px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="font-family:'Outfit';font-weight:600;font-size:17px;">{{ f.label }}</span>
+              <span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:{{ f.tagFg }};background:{{ f.tagBg }};border-radius:999px;padding:3px 9px;">{{ f.tag }}</span>
+            </div>
+            <div style="font-size:13px;line-height:1.5;color:#5A423C;margin-bottom:16px;">{{ f.note }}</div>
+            <div style="display:flex;align-items:flex-end;gap:18px;">
+              <div style="text-align:center;">
+                <div style="width:300px;height:150px;border-radius:16px;overflow:hidden;background:{{ f.heroBg }};display:flex;align-items:center;justify-content:center;">
+                  <sc-if value="{{ f.isLogo }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:9px;"><div style="width:40px;height:46px;background:{{ f.ink }};clip-path:polygon(50% 0,100% 16%,100% 64%,50% 100%,0 64%,0 16%);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Fraunces';font-weight:600;font-size:17px;color:{{ f.heroBg }};margin-top:-2px;">N</span></div><span style="font-family:'Fraunces';font-weight:600;font-size:16px;letter-spacing:0.14em;color:{{ f.ink }};">NORTHRIDGE</span></div>
+                  </sc-if>
+                </div>
+                <div style="font-size:11.5px;color:#8C726B;margin-top:8px;">hero · 2:1 capped</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="width:64px;height:64px;border-radius:18px;overflow:hidden;background:{{ f.heroBg }};display:flex;align-items:center;justify-content:center;">
+                  <sc-if value="{{ f.isLogo }}" hint-placeholder-val="{{ false }}">
+                    <div style="width:32px;height:36px;background:{{ f.ink }};clip-path:polygon(50% 0,100% 16%,100% 64%,50% 100%,0 64%,0 16%);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Fraunces';font-weight:600;font-size:14px;color:{{ f.heroBg }};margin-top:-2px;">N</span></div>
+                  </sc-if>
+                </div>
+                <div style="font-size:11.5px;color:#8C726B;margin-top:8px;">thumb · 1:1</div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ===== FALLBACK LADDER ===== -->
+    <section id="fallback" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">02</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">The fallback ladder</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">A failure is invisible</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;"><b>image → icon+accent tile → plain default.</b> The icon tile is a deliberate, attractive full-bleed surface in the exact slot size/shape — so loading, error and "nothing set" all read identically and the list rhythm never breaks.</p>
+      <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:26px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <sc-for list="{{ ladder }}" as="s" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div style="text-align:center;">
+              <div style="width:84px;height:84px;border-radius:22px;overflow:hidden;background:{{ s.bg }};display:flex;align-items:center;justify-content:center;position:relative;">
+                <sc-if value="{{ s.isIcon }}" hint-placeholder-val="{{ false }}"><span class="msr fill" style="font-size:38px;color:{{ s.glyph }};">{{ s.icon }}</span></sc-if>
+                <sc-if value="{{ s.isDefault }}" hint-placeholder-val="{{ false }}"><span class="msr" style="font-size:34px;color:{{ s.glyph }};">{{ s.icon }}</span></sc-if>
+              </div>
+              <div style="font-family:'Outfit';font-weight:600;font-size:13px;margin-top:10px;">{{ s.label }}</div>
+              <div style="font-size:11.5px;color:#8C726B;max-width:14ch;margin:2px auto 0;line-height:1.35;">{{ s.note }}</div>
+            </div>
+            <sc-if value="{{ s.arrow }}" hint-placeholder-val="{{ true }}"><span class="msr" style="font-size:26px;color:#C5A59D;">arrow_forward</span></sc-if>
+          </div>
+        </sc-for>
+        <div style="flex:1;min-width:200px;border-left:1px solid #EBD3CB;padding-left:22px;">
+          <div style="font-size:12.5px;font-weight:600;color:#5A423C;margin-bottom:8px;">Loading &amp; error, in slot</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span class="msr" style="font-size:18px;color:#00796F;">hourglass_top</span><span style="font-size:13px;color:#5A423C;">Loading → a shimmer in the exact 1:1 slot. No spinner, no jump.</span></div>
+          <div style="display:flex;align-items:center;gap:10px;"><span class="msr" style="font-size:18px;color:#00796F;">check_circle</span><span style="font-size:13px;color:#5A423C;">Error → silently falls to the icon tile. Never a broken-image glyph.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== B. HERO HEADER ===== -->
+    <section id="hero" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">B</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Hub detail · HubDetailScreen · LargeTopAppBar</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">Hero that stays legible &amp; calm — and collapses</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">Height-capped (≈2:1, never dominating a phone), edge-to-edge under the status bar with light icons, a bottom gradient scrim that keeps a white title readable, and a <b>collapsing</b> accent-tinted top app bar on scroll. Three sources — photo, logo, none — each in light &amp; dark.</p>
+      <div style="display:flex;gap:36px;flex-wrap:wrap;">
+        <sc-for list="{{ heroFrames }}" as="f" hint-placeholder-count="8">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="font-size:12.5px;font-weight:600;color:#5A423C;">{{ f.label }}</div>
+            <dc-import name="Hub-Enrichment-Phone" mode="{{ f.mode }}" view="hero" heroKind="{{ f.kind }}" collapsed="{{ f.collapsed }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ===== SCRIM STRESS ===== -->
+    <section id="scrim" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">03</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Scrim stress test</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">White title holds over a busy photo and a pale logo</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">The bottom scrim is a fixed gradient band sized to the title — strong enough that the same white title is legible over a high-key beach photo <i>and</i> over a near-white logo letterbox. Contrast never depends on the image.</p>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;">
+        <sc-for list="{{ scrimFrames }}" as="s" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:12px;font-weight:600;color:#5A423C;">{{ s.label }}</div>
+            <div style="width:300px;height:170px;border-radius:18px;overflow:hidden;position:relative;background:{{ s.bg }};display:flex;align-items:center;justify-content:center;">
+              <sc-if value="{{ s.isLogo }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:-22px;"><div style="width:38px;height:44px;background:{{ s.ink }};clip-path:polygon(50% 0,100% 16%,100% 64%,50% 100%,0 64%,0 16%);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Fraunces';font-weight:600;font-size:16px;color:{{ s.bg }};margin-top:-2px;">N</span></div><span style="font-family:'Fraunces';font-weight:600;font-size:15px;letter-spacing:0.14em;color:{{ s.ink }};">NORTHRIDGE</span></div>
+              </sc-if>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:108px;background:linear-gradient(to top,rgba(18,8,4,0.82) 0%,rgba(18,8,4,0.38) 48%,transparent 100%);"></div>
+              <div style="position:absolute;bottom:14px;left:16px;right:16px;"><h3 style="font-family:'Outfit';font-weight:600;font-size:20px;color:#fff;margin:0;text-shadow:0 1px 10px rgba(0,0,0,0.4);">{{ s.title }}</h3><div style="font-size:12px;color:rgba(255,255,255,0.9);margin-top:2px;">{{ s.meta }}</div></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ===== C. CARDS & BLOCKS ===== -->
+    <section id="cards" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">C</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Cards &amp; blocks · FeedScreen / HubBlockCard</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">Lighter cues — icon, accent chip, thumbnail, avatar</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">Briefing cards get a <code style="font-family:monospace;background:#FCEBE6;padding:1px 5px;border-radius:5px;font-size:12px;">media.icon</code> + accent on the kind chip and an optional leading thumbnail. A document block carries a fixed-aspect preview; a contact block prefers an <code style="font-family:monospace;background:#FCEBE6;padding:1px 5px;border-radius:5px;font-size:12px;">avatarUrl</code> and falls back to an initials avatar. Cards stay compact — the briefing never becomes a media feed.</p>
+      <div style="display:flex;gap:36px;flex-wrap:wrap;">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:12.5px;font-weight:600;color:#5A423C;display:flex;align-items:center;gap:6px;"><span class="msr" style="font-size:15px;">light_mode</span>Light</div>
+          <dc-import name="Hub-Enrichment-Phone" mode="light" view="cards" hint-size="390px,844px"></dc-import>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:12.5px;font-weight:600;color:#5A423C;display:flex;align-items:center;gap:6px;"><span class="msr" style="font-size:15px;">dark_mode</span>Dark</div>
+          <dc-import name="Hub-Enrichment-Phone" mode="dark" view="cards" hint-size="390px,844px"></dc-import>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== D. ICON SET ===== -->
+    <section id="icons" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">D</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">The curated icon set</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">18 named icons, one line weight</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">Covers the hub catalog and common content. The client ships <b>no icon font</b> — this is a small bundled set, kept tight and visually unified (Material Symbols Rounded weight 400). Each shows as the icon-tile glyph (accent-filled) and inline (outline).</p>
+      <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:26px;display:grid;grid-template-columns:repeat(6,1fr);gap:20px;">
+        <sc-for list="{{ iconSet }}" as="i" hint-placeholder-count="18">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <span style="width:42px;height:42px;border-radius:13px;background:{{ i.tile }};display:flex;align-items:center;justify-content:center;"><span class="msr fill" style="font-size:22px;color:{{ i.onTile }};">{{ i.icon }}</span></span>
+              <span class="msr" style="font-size:24px;color:#5A423C;">{{ i.icon }}</span>
+            </div>
+            <span style="font-family:monospace;font-size:11px;color:#8C726B;">{{ i.name }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ===== E. ACCENT — SURFACES + STRESS ===== -->
+    <section id="accent" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">E</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Accent color, used safely</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">One brand hex, decorative surfaces only</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">The raw hex is never painted on text or large fills. It seeds a <b>derived, contrast-clamped</b> set of roles (edge, tile, on-tile, chip) so a saturated, a near-white and a near-black accent each stay visible on light <i>and</i> dark. Meaning is always carried by icon + text; color only reinforces.</p>
+
+      <!-- surfaces sheet -->
+      <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:22px;margin-bottom:30px;">
+        <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:24px;">
+          <div style="font-family:'Outfit';font-weight:600;font-size:16px;margin-bottom:16px;">A sample enriched row — annotated</div>
+          <div style="background:#FCEBE6;border-radius:20px;padding:14px 16px;display:flex;align-items:center;gap:14px;border-left:3px solid #1C6E8C;margin-bottom:18px;">
+            <span style="width:52px;height:52px;border-radius:15px;background:#1C6E8C;display:flex;align-items:center;justify-content:center;"><span class="msr fill" style="font-size:26px;color:#fff;">flight_takeoff</span></span>
+            <div style="flex:1;"><div style="font-family:'Outfit';font-weight:600;font-size:15.5px;color:#271814;">Summer trip — Lisbon</div><div style="display:flex;gap:7px;margin-top:5px;"><span style="font-size:11px;font-weight:600;color:#0C5168;background:#CDE7F0;padding:3px 8px;border-radius:7px;">PLANNING</span></div></div>
+            <div style="font-family:'Outfit';font-weight:700;font-size:18px;color:#1C6E8C;">48</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px;">
+            <sc-for list="{{ surfaceRules }}" as="r" hint-placeholder-count="6">
+              <div style="display:flex;align-items:flex-start;gap:9px;"><span class="msr {{ r.fill }}" style="font-size:18px;color:{{ r.color }};margin-top:1px;">{{ r.icon }}</span><span style="font-size:13px;line-height:1.45;color:#3D2D28;"><b>{{ r.what }}</b> — {{ r.detail }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:24px;">
+          <div style="font-family:'Outfit';font-weight:600;font-size:16px;margin-bottom:8px;">The derivation</div>
+          <p style="font-size:13px;line-height:1.55;color:#5A423C;margin:0 0 16px;">From the brand hex we keep the hue, clamp chroma and pin lightness into a legible band per theme. Raw input on the left, the four safe roles it produces on the right.</p>
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <sc-for list="{{ deriveDemo }}" as="d" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="text-align:center;"><div style="width:46px;height:46px;border-radius:12px;background:{{ d.raw }};border:1px solid rgba(0,0,0,0.08);"></div><div style="font-family:monospace;font-size:10px;color:#8C726B;margin-top:5px;">{{ d.raw }}</div></div>
+                <span class="msr" style="font-size:20px;color:#C5A59D;">arrow_forward</span>
+                <div style="display:flex;gap:7px;">
+                  <sc-for list="{{ d.roles }}" as="rr" hint-placeholder-count="4">
+                    <div style="text-align:center;"><div style="width:38px;height:46px;border-radius:10px;background:{{ rr.bg }};display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;"><span style="font-size:13px;color:{{ rr.fg }};" class="msr fill">{{ rr.glyph }}</span></div><div style="font-size:9.5px;color:#8C726B;margin-top:4px;">{{ rr.label }}</div></div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3-accent stress, light + dark -->
+      <h3 style="font-family:'Outfit';font-weight:600;font-size:19px;margin:0 0 16px;">Stress test — saturated · near-white · near-black, on a row + hero</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;">
+        <sc-for list="{{ stress }}" as="s" hint-placeholder-count="3">
+          <div style="border:1px solid #EBD3CB;border-radius:22px;overflow:hidden;">
+            <div style="padding:14px 16px 12px;background:#FFF8F6;display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-family:'Outfit';font-weight:600;font-size:15px;color:#271814;">{{ s.name }}</span>
+              <span style="font-family:monospace;font-size:11px;color:#8C726B;">{{ s.hex }}</span>
+            </div>
+            <sc-for list="{{ s.modes }}" as="m" hint-placeholder-count="2">
+              <div style="padding:16px;background:{{ m.surface }};">
+                <div style="font-size:10.5px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:{{ m.onSurfaceVar }};margin-bottom:10px;">{{ m.label }}</div>
+                <!-- row -->
+                <div style="background:{{ m.container }};border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:10px;border-left:3px solid {{ m.edge }};margin-bottom:12px;">
+                  <span style="width:38px;height:38px;border-radius:11px;background:{{ m.tile }};display:flex;align-items:center;justify-content:center;"><span class="msr fill" style="font-size:20px;color:{{ m.onTile }};">hiking</span></span>
+                  <div style="flex:1;"><div style="font-family:'Outfit';font-weight:600;font-size:13.5px;color:{{ m.onSurface }};">Trail trip</div><span style="font-size:10px;font-weight:600;color:{{ m.chipFg }};background:{{ m.chipBg }};padding:2px 7px;border-radius:6px;">PLANNING</span></div>
+                  <span style="font-family:'Outfit';font-weight:700;font-size:15px;color:{{ m.edge }};">6</span>
+                </div>
+                <!-- mini hero -->
+                <div style="height:62px;border-radius:12px;position:relative;overflow:hidden;background:{{ m.containBg }};display:flex;align-items:center;justify-content:center;">
+                  <span class="msr fill" style="font-size:30px;color:{{ m.logoInk }};opacity:0.85;">hiking</span>
+                  <div style="position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(to top,rgba(18,8,4,0.78),transparent);"></div>
+                  <span style="position:absolute;bottom:7px;left:10px;font-family:'Outfit';font-weight:600;font-size:12px;color:#fff;">Hero title</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ===== EMPTY / FIRST-RUN ===== -->
+    <section id="empty" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">F</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Empty / first-run</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">Nothing enriched still looks deliberate</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">A brand-new hub with no image gets the accent/icon header (never a broken image), and an inviting body — an "add a cover" prompt plus first-step suggestions. Intentional, not unfinished.</p>
+      <div style="display:flex;gap:36px;flex-wrap:wrap;">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:12.5px;font-weight:600;color:#5A423C;display:flex;align-items:center;gap:6px;"><span class="msr" style="font-size:15px;">light_mode</span>Light</div>
+          <dc-import name="Hub-Enrichment-Phone" mode="light" view="hero" heroKind="none" invite="true" hint-size="390px,844px"></dc-import>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:12.5px;font-weight:600;color:#5A423C;display:flex;align-items:center;gap:6px;"><span class="msr" style="font-size:15px;">dark_mode</span>Dark</div>
+          <dc-import name="Hub-Enrichment-Phone" mode="dark" view="hero" heroKind="none" invite="true" hint-size="390px,844px"></dc-import>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ADAPTIVE + WEAR ===== -->
+    <section id="adaptive" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">G</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Adaptive · tablet · desktop · Wear</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 8px;">More room makes the imagery shine</h2>
+      <p style="font-size:14.5px;line-height:1.55;color:#5A423C;max-width:66ch;margin:0 0 26px;">Phone gets full hi-fi (above). Larger windows turn the list into a richer thumbnail grid and give the hero more height; the Wear glance tile is the ideal home for the icon+accent tile.</p>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
+        <!-- tablet/desktop grid -->
+        <div style="flex:1;min-width:520px;background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:22px;">
+          <div style="font-family:'Outfit';font-weight:600;font-size:15px;margin-bottom:4px;">Tablet / desktop — list becomes a grid</div>
+          <div style="font-size:12.5px;color:#8C726B;margin-bottom:16px;">M3 expanded window · 2–3 column grid, thumbnails larger, hero ~2.4:1</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+            <sc-for list="{{ gridCards }}" as="g" hint-placeholder-count="6">
+              <div style="background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(39,24,20,0.08);border-left:3px solid {{ g.edge }};">
+                <div style="height:84px;background:{{ g.thumb }};background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;">
+                  <sc-if value="{{ g.isIcon }}" hint-placeholder-val="{{ false }}"><span class="msr fill" style="font-size:34px;color:{{ g.glyph }};">{{ g.icon }}</span></sc-if>
+                </div>
+                <div style="padding:11px 13px;"><div style="font-family:'Outfit';font-weight:600;font-size:13.5px;color:#271814;line-height:1.2;">{{ g.title }}</div><div style="font-size:11px;color:#8C726B;margin-top:3px;">{{ g.meta }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <!-- wear -->
+        <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:22px;text-align:center;">
+          <div style="font-family:'Outfit';font-weight:600;font-size:15px;margin-bottom:16px;">Wear OS glance tile</div>
+          <div style="width:200px;height:200px;border-radius:999px;background:#000;display:flex;align-items:center;justify-content:center;margin:0 auto;box-shadow:0 12px 30px rgba(0,0,0,0.3);">
+            <div style="width:184px;height:184px;border-radius:999px;background:#0E0B0A;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;">
+              <span style="width:54px;height:54px;border-radius:16px;background:#2C3E73;display:flex;align-items:center;justify-content:center;"><span class="msr fill" style="font-size:30px;color:#C9D4F2;">school</span></span>
+              <div style="font-family:'Outfit';font-weight:600;font-size:14px;color:#F0DFDA;">Maya · college</div>
+              <div style="font-size:12px;color:#A08D87;">Move-in in 12 days</div>
+            </div>
+          </div>
+          <div style="font-size:11.5px;color:#8C726B;margin-top:14px;max-width:22ch;line-height:1.4;">Icon+accent tile is the glanceable — no photo decode on watch.</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;font-size:12.5px;line-height:1.5;color:#8C726B;max-width:80ch;"><b>iOS parity (Compose Multiplatform):</b> hero goes edge-to-edge under the iOS status bar; force light status-bar content while the hero is expanded, restore on collapse. Respect the safe-area inset for the back button.</div>
+    </section>
+
+    <!-- ===== COMPONENT MAP ===== -->
+    <section id="map" style="margin-bottom:64px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">H</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Component map → M3 Compose</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 22px;">Each new piece, its Compose name &amp; insertion point</h2>
+      <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;overflow:hidden;">
+        <div style="display:grid;grid-template-columns:1.2fr 1.3fr 1.2fr;gap:0;background:#F6E5E0;padding:13px 20px;font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#5A423C;">
+          <span>New component</span><span>M3 Compose</span><span>Insertion point</span>
+        </div>
+        <sc-for list="{{ componentMap }}" as="m" hint-placeholder-count="7">
+          <div style="display:grid;grid-template-columns:1.2fr 1.3fr 1.2fr;gap:0;padding:14px 20px;border-top:1px solid #F0DFDA;align-items:start;">
+            <div><div style="font-family:'Outfit';font-weight:600;font-size:14px;color:#271814;">{{ m.name }}</div><div style="font-size:12px;color:#8C726B;line-height:1.4;margin-top:2px;">{{ m.desc }}</div></div>
+            <div style="font-family:monospace;font-size:12.5px;color:#7A2615;line-height:1.5;">{{ m.compose }}</div>
+            <div style="font-family:monospace;font-size:12px;color:#5A423C;">{{ m.insert }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- ===== ACCENT RULE + FIELDS ===== -->
+    <section id="rules" style="margin-bottom:30px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C0381E;">I</span><span style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8C726B;">Accent rule · data fields</span></div>
+      <h2 style="font-family:'Outfit';font-weight:600;font-size:30px;letter-spacing:-0.015em;margin:0 0 22px;">The rule, and the fields</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">
+        <div style="background:#F4ECFB;border:1px solid #E0CDF5;border-radius:24px;padding:24px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span class="msr" style="font-size:22px;color:#6438AE;">palette</span><span style="font-family:'Outfit';font-weight:600;font-size:16px;color:#3A0080;">Accent-color usage rule</span></div>
+          <p style="font-size:13.5px;line-height:1.6;color:#4C2092;margin:0;">A hub/card's <code style="font-family:monospace;background:#fff;padding:1px 5px;border-radius:5px;font-size:12px;">accentColor</code> is a <b>seed, not a paint</b>. The renderer harmonizes it — keep hue, clamp chroma, pin lightness into a legible band per theme — then applies the derived roles only to <b>decorative surfaces</b>: the card left-edge/border, the icon tile, chips, and the hero scrim tint. It is <b>never</b> placed on body text, headlines, or large background fills, where an arbitrary brand hex would fail WCAG&nbsp;1.4.1 / contrast. Meaning is always carried by icon + text; color only reinforces. Loading, error and "nothing set" resolve to the same accent tile so a missing image is invisible.</p>
+        </div>
+        <div style="background:#FFF8F6;border:1px solid #EBD3CB;border-radius:24px;padding:24px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span class="msr" style="font-size:22px;color:#00796F;">data_object</span><span style="font-family:'Outfit';font-weight:600;font-size:16px;">Fields used — &amp; one flag</span></div>
+          <div style="font-size:13px;line-height:1.6;color:#3D2D28;">
+            <div style="margin-bottom:10px;">Built entirely on the §6 model — <b>no new fields invented</b>:</div>
+            <div style="font-family:monospace;font-size:11.5px;color:#5A423C;background:#FCEBE6;border-radius:12px;padding:12px 14px;line-height:1.7;margin-bottom:14px;">Hub {heroUrl, thumbnailUrl,<br>&nbsp;&nbsp;heroFit: cover|contain, imageAlt,<br>&nbsp;&nbsp;icon, accentColor}<br>Card {icon, accentColor, thumbnailUrl,<br>&nbsp;&nbsp;imageAlt, imageFit}<br>block {thumbnailUrl | avatarUrl}</div>
+            <div style="display:flex;align-items:flex-start;gap:8px;"><span class="msr" style="font-size:18px;color:#C0381E;margin-top:1px;">flag</span><span><b>Flag:</b> <code style="font-family:monospace;background:#FCEBE6;padding:1px 5px;border-radius:5px;font-size:11.5px;">icon</code> should be constrained to the curated named set (enum), not a free string — so an unknown name falls to the plain default rather than rendering nothing. No schema change, just validation.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div style="height:1px;background:#D8C2BB;margin:40px 0 20px;"></div>
+    <div style="font-size:12.5px;color:#8C726B;text-align:center;">Dayfold · Hub &amp; card visual enrichment · Material 3 Expressive · author-supplied imagery, app-rendered · a failure is invisible</div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const h2r = (h) => { h = h.replace('#',''); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; };
+    const r2h = (r,g,b) => { const f = (x) => ('0'+Math.round(Math.max(0,Math.min(255,x))).toString(16)).slice(-2); return '#'+f(r)+f(g)+f(b); };
+    const r2hsl = (r,g,b) => { r/=255;g/=255;b/=255; const mx=Math.max(r,g,b),mn=Math.min(r,g,b); let hh,s,l=(mx+mn)/2; if(mx===mn){hh=s=0;} else { const d=mx-mn; s=l>0.5?d/(2-mx-mn):d/(mx+mn); if(mx===r)hh=(g-b)/d+(g<b?6:0); else if(mx===g)hh=(b-r)/d+2; else hh=(r-g)/d+4; hh/=6;} return [hh*360,s,l]; };
+    const hsl2h = (hh,s,l) => { hh/=360; let r,g,b; if(s===0){r=g=b=l;} else { const q=l<0.5?l*(1+s):l+s-l*s; const p=2*l-q; const t2=(t)=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;}; r=t2(hh+1/3);g=t2(hh);b=t2(hh-1/3);} return r2h(r*255,g*255,b*255); };
+    const lum = (hex) => { const v = h2r(hex).map(x=>{x/=255;return x<=0.03928?x/12.92:Math.pow((x+0.055)/1.055,2.4);}); return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2]; };
+    const clamp = (x,a,b)=>Math.min(Math.max(x,a),b);
+    const derive = (hex, m) => {
+      const [hh,s0,l] = r2hsl(...h2r(hex));
+      const s = clamp(s0, 0.10, 0.92);
+      const edge = hsl2h(hh, s, m==='dark' ? clamp(l,0.60,0.80) : clamp(l,0.34,0.52));
+      const tile = hsl2h(hh, clamp(s,0,0.62), m==='dark'?0.34:0.46);
+      const onTile = lum(tile) > 0.45 ? '#1A0D08' : '#FFFFFF';
+      const containBg = hsl2h(hh, clamp(s,0,0.42), m==='dark'?0.17:0.93);
+      const logoInk = hsl2h(hh, clamp(s,0,0.7), m==='dark'?0.78:0.34);
+      const chipBg = m==='dark' ? hsl2h(hh, clamp(s,0,0.5), 0.26) : hsl2h(hh, clamp(s,0,0.5), 0.90);
+      const chipFg = m==='dark' ? hsl2h(hh, clamp(s,0,0.6), 0.86) : hsl2h(hh, clamp(s,0,0.7), 0.28);
+      return { edge, tile, onTile, containBg, logoInk, chipBg, chipFg };
+    };
+    const roleSurface = (m) => m==='dark'
+      ? { surface:'#1A110E', container:'#271D1A', onSurface:'#F0DFDA', onSurfaceVar:'#A08D87' }
+      : { surface:'#FFF8F6', container:'#FCEBE6', onSurface:'#271814', onSurfaceVar:'#8C726B' };
+
+    const photoCoast = 'linear-gradient(180deg,#7FB8D8 0%,#A9D6E2 30%,#F0D9A6 56%,#E59B5A 78%,#C56A3A 100%),radial-gradient(circle at 78% 26%,rgba(255,247,224,0.95) 0 7%,transparent 9%)';
+    const photoFest  = 'radial-gradient(circle at 26% 22%,#FFD56B 0 16%,transparent 18%),radial-gradient(circle at 74% 30%,#9DF2E4 0 11%,transparent 13%),radial-gradient(circle at 60% 70%,#FFB4A3 0 14%,transparent 16%),linear-gradient(135deg,#C0381E,#7A2615)';
+    const navyTint = derive('#2C3E73','light').containBg;
+    const navyInk = derive('#2C3E73','light').logoInk;
+
+    // accent stress accents
+    const stressAccents = [
+      { name:'Saturated', hex:'#3B5BDB' },
+      { name:'Near-white', hex:'#ECE9E1' },
+      { name:'Near-black', hex:'#20212A' },
+    ];
+    const stress = stressAccents.map(a => ({
+      name:a.name, hex:a.hex,
+      modes:['light','dark'].map(m => {
+        const d = derive(a.hex, m); const rs = roleSurface(m);
+        return { label: m==='dark'?'Dark':'Light', ...rs, ...d };
+      })
+    }));
+
+    // derivation demo (raw -> 4 roles), light theme
+    const deriveDemo = stressAccents.map(a => {
+      const d = derive(a.hex,'light');
+      return { raw:a.hex, roles:[
+        { bg:d.edge, fg:'#fff', glyph:'', label:'edge' },
+        { bg:d.tile, fg:d.onTile, glyph:'hiking', label:'tile' },
+        { bg:d.chipBg, fg:d.chipFg, glyph:'', label:'chip' },
+        { bg:d.containBg, fg:d.logoInk, glyph:'image', label:'tint' },
+      ]};
+    });
+
+    const iconNames = [
+      ['school','school'],['luggage','luggage'],['medical_services','medical'],['home','move'],
+      ['celebration','party'],['stroller','baby'],['calendar_month','calendar'],['location_on','location'],
+      ['link','link'],['description','document'],['person','contact'],['payments','budget'],
+      ['flight_takeoff','travel'],['directions_car','car'],['restaurant','food'],['pets','pet'],
+      ['sports_soccer','sport'],['checklist','list'],
+    ];
+    const iconAccents = ['#1C6E8C','#2C3E73','#1F8A6D','#7A5BB5','#C0381E','#B5651D'];
+    const iconSet = iconNames.map((n,i) => {
+      const d = derive(iconAccents[i % iconAccents.length],'light');
+      return { icon:n[0], name:n[1], tile:d.tile, onTile:d.onTile };
+    });
+
+    return {
+      toc: [
+        { label:'Problems', href:'#list' }, { label:'Hub list', href:'#list' }, { label:'Fit', href:'#fit' },
+        { label:'Fallback', href:'#fallback' }, { label:'Hero', href:'#hero' }, { label:'Scrim', href:'#scrim' },
+        { label:'Cards', href:'#cards' }, { label:'Icons', href:'#icons' }, { label:'Accent', href:'#accent' },
+        { label:'First-run', href:'#empty' }, { label:'Adaptive', href:'#adaptive' }, { label:'Component map', href:'#map' },
+      ],
+      problems: [
+        { icon:'crop', title:'Logo vs photo fit', body:'One image field carries a wide wordmark, a square mascot and a landscape photo. cover vs contain, never a blind crop.' },
+        { icon:'layers', title:'Fallback ladder', body:'image → icon+accent tile → plain default. The unenriched state is a designed surface, not a placeholder.' },
+        { icon:'palette', title:'Accent, used safely', body:'One brand hex tints decorative surfaces only — never body text. Derived & contrast-clamped per theme.' },
+        { icon:'image', title:'Legible calm hero', body:'Height-capped, collapsing app bar, edge-to-edge under the status bar, scrim that keeps a white title readable.' },
+      ],
+      rowTypes: [
+        { icon:'photo', color:'#1C6E8C', title:'Cover photo', body:'Lisbon — fills the slot edge-to-edge.' },
+        { icon:'school', color:'#2C3E73', title:'Contain logo', body:'Northridge — letterboxed on an accent tint.' },
+        { icon:'category', color:'#1F8A6D', title:'Icon + accent tile', body:'No image set — a deliberate full-bleed tile.' },
+        { icon:'hourglass_top', color:'#B5651D', title:'Loading shimmer', body:'House move — shimmer in the fixed slot.' },
+        { icon:'check_circle', color:'#7A5BB5', title:'Failed → icon tile', body:'Indistinguishable from "no image".' },
+      ],
+      fits: [
+        { label:'cover', tag:'PHOTOS', tagFg:'#0C5168', tagBg:'#CDE7F0', note:'Edge-to-edge crop, centered. Right for photos that have no important edges.', heroBg:photoCoast, isLogo:false, ink:'#fff' },
+        { label:'contain', tag:'LOGOS', tagFg:navyInk, tagBg:navyTint, note:'Letterboxed with padding on an accent-tinted pad — the whole mark survives, transparent PNGs sit on a real surface.', heroBg:navyTint, isLogo:true, ink:navyInk },
+      ],
+      ladder: [
+        { bg:photoCoast, isIcon:false, isDefault:false, glyph:'#fff', icon:'', label:'1 · Image', note:'cover or contain', arrow:true },
+        { bg:derive('#1F8A6D','light').tile, isIcon:true, isDefault:false, glyph:derive('#1F8A6D','light').onTile, icon:'medical_services', label:'2 · Icon + accent tile', note:'attractive, full-bleed', arrow:true },
+        { bg:'#F0DFDA', isIcon:false, isDefault:true, glyph:'#8C726B', icon:'dashboard_customize', label:'3 · Plain default', note:'no accent set', arrow:false },
+      ],
+      heroFrames: [
+        { label:'Photo · expanded · light', mode:'light', kind:'photo', collapsed:'false' },
+        { label:'Photo · expanded · dark', mode:'dark', kind:'photo', collapsed:'false' },
+        { label:'Photo · collapsed', mode:'light', kind:'photo', collapsed:'true' },
+        { label:'Logo · expanded · light', mode:'light', kind:'logo', collapsed:'false' },
+        { label:'Logo · expanded · dark', mode:'dark', kind:'logo', collapsed:'false' },
+        { label:'Logo · collapsed', mode:'light', kind:'logo', collapsed:'true' },
+        { label:'None · accent header · light', mode:'light', kind:'none', collapsed:'false' },
+        { label:'None · accent header · dark', mode:'dark', kind:'none', collapsed:'false' },
+      ],
+      scrimFrames: [
+        { label:'Busy photo · light', bg:photoCoast, isLogo:false, ink:'#fff', title:'Summer trip — Lisbon', meta:'Aug 3–12 · 5 travelers' },
+        { label:'Pale logo · light', bg:navyTint, isLogo:true, ink:navyInk, title:'Maya starts college', meta:'Move-in Aug 24' },
+        { label:'Busy photo · dark', bg:photoFest, isLogo:false, ink:'#fff', title:"Theo's birthday", meta:'Today · 12 guests' },
+        { label:'Pale logo · dark', bg:derive('#2C3E73','dark').containBg, isLogo:true, ink:derive('#2C3E73','dark').logoInk, title:'Maya starts college', meta:'Move-in Aug 24' },
+      ],
+      iconSet,
+      surfaceRules: [
+        { fill:'fill', color:'#1F8A6D', icon:'check_circle', what:'Card left-edge / border', detail:'3 px accent rule carries identity.' },
+        { fill:'fill', color:'#1F8A6D', icon:'check_circle', what:'Icon tile', detail:'full accent fill, glyph in on-color.' },
+        { fill:'fill', color:'#1F8A6D', icon:'check_circle', what:'Chips', detail:'kind / status — derived container + on-color.' },
+        { fill:'fill', color:'#1F8A6D', icon:'check_circle', what:'Hero scrim tint & countdown', detail:'reinforces, never sole signal.' },
+        { fill:'', color:'#BA1A1A', icon:'cancel', what:'Body text & headlines', detail:'always the theme on-surface ink.' },
+        { fill:'', color:'#BA1A1A', icon:'cancel', what:'Large background fills', detail:'surfaces stay on the neutral ramp.' },
+      ],
+      deriveDemo, stress,
+      gridCards: [
+        { edge:derive('#1C6E8C','light').edge, thumb:photoCoast, isIcon:false, glyph:'#fff', icon:'', title:'Summer trip — Lisbon', meta:'48 days' },
+        { edge:derive('#2C3E73','light').edge, thumb:navyTint, isIcon:true, glyph:navyInk, icon:'school', title:'Maya starts college', meta:'12 days' },
+        { edge:derive('#1F8A6D','light').edge, thumb:derive('#1F8A6D','light').tile, isIcon:true, glyph:derive('#1F8A6D','light').onTile, icon:'medical_services', title:"Dad's knee surgery", meta:'recovery' },
+        { edge:derive('#C0381E','light').edge, thumb:photoFest, isIcon:false, glyph:'#fff', icon:'', title:"Theo's birthday", meta:'Today' },
+        { edge:derive('#7A5BB5','light').edge, thumb:derive('#7A5BB5','light').tile, isIcon:true, glyph:derive('#7A5BB5','light').onTile, icon:'home_work', title:'House move', meta:'21 days' },
+        { edge:derive('#B5651D','light').edge, thumb:derive('#B5651D','light').tile, isIcon:true, glyph:derive('#B5651D','light').onTile, icon:'restaurant', title:'Anniversary dinner', meta:'9 days' },
+      ],
+      componentMap: [
+        { name:'HubHeroImage', desc:'AsyncImage in a fixed 2:1 box with cover/contain + scrim.', compose:'AsyncImage + Box(scrim) inside LargeTopAppBar', insert:'HubScreens.kt · HubDetailScreen header' },
+        { name:'CollapsingHubBar', desc:'Hero collapses to accent-tinted bar on scroll.', compose:'LargeTopAppBar + TopAppBarScrollBehavior', insert:'HubScreens.kt · HubDetailScreen' },
+        { name:'HubThumbnail', desc:'1:1 slot: image / icon-tile / shimmer, no shift.', compose:'Box + AsyncImage + placeholder/error', insert:'HubScreens.kt · HubRow leading' },
+        { name:'IconAccentTile', desc:'Fallback + Wear glance — icon on derived accent.', compose:'Surface(tonal) + Icon', insert:'HubScreens.kt · HubRow / Wear tile' },
+        { name:'AccentRoles', desc:'Harmonize brand hex → edge/tile/chip roles.', compose:'ColorScheme.harmonize() helper', insert:'theme/AccentRoles.kt (new)' },
+        { name:'KindChip', desc:'Card kind chip with media.icon + accent.', compose:'AssistChip(leadingIcon)', insert:'FeedScreen.kt · HubBlockCard' },
+        { name:'ContactAvatar', desc:'avatarUrl photo → initials fallback.', compose:'AsyncImage / Box(initials)', insert:'FeedScreen.kt · ContactBlock' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

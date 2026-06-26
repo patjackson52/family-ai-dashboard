@@ -368,7 +368,14 @@ internal val USAGE =
     "  pull [--hub <id>]          read content back (cards+hubs, or one hub tree)\n" +
     "  template <type>            starter body: a card type, or hub|section|block\n" +
     "  version | --version       print the CLI version\n" +
-    "  help | -h | --help         print this usage"
+    "  help | -h | --help         print this usage\n" +
+    "\n" +
+    "  visual enrichment (ADR 0036): hub/card `media` {heroUrl,thumbnailUrl,heroFit,\n" +
+    "    imageAlt,icon,accentColor} + block link/document thumbnailUrl + contact\n" +
+    "    avatarUrl. image URLs must be https on an ALLOWED host (upload.wikimedia.org);\n" +
+    "    icon ∈ {school,luggage,medical,move,party,baby,calendar,location,link,document,\n" +
+    "    contact,budget,travel,car,food,pet,sport,list}; accentColor #RRGGBB (decorative).\n" +
+    "    The authoring skill MUST surface the chosen image to the operator before push."
 
 // Misuse → usage to stderr, exit 2. Explicit `help` prints to stdout + exits 0 (help
 // is not an error) — see the dispatch in main().

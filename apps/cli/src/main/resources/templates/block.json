@@ -1,6 +1,12 @@
 {
   "sectionId": "REPLACE_WITH_SECTION_ID",
-  "type": "text",
+  "type": "link",
   "ord": 0,
-  "body_md": "Notes go here — change `type` to checklist/link/contact/etc. and add a `payload`."
+  "payload": {
+    "url": "https://northridge.edu/orientation/move-in",
+    "label": "New-student move-in guide",
+    "source": "northridge.edu",
+    "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0c/EXAMPLE_campus.png",
+    "thumbnailAlt": "Campus aerial photo"
+  }
 }
