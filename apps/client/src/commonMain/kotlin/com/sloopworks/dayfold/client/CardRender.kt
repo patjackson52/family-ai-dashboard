@@ -70,10 +70,12 @@ fun hasActionLinks(md: String): Boolean =
 // RAW Text — `**Jul 1**` showed the asterisks. Render to an AnnotatedString:
 // **bold**, _italic_, `- `/`- [ ]`/`- [x]` + ordered (`1.`) lists, | tables |,
 // ATX `#`/`##` headings, and the same vetted [label](url) links as cards.
-// ONLY images remain passthrough (need async, host-gated loading — see OQ).
-// inline tokens: **bold** | [label](url) | _italic_ | bare autolink (https://…).
-// The [..](..) alt precedes the bare-URL alt so a markdown link's URL isn't re-matched.
-private val INLINE = Regex("""\*\*(.+?)\*\*|\[([^\]]+)]\(([^)]+)\)|_([^_]+?)_|(https?://[^\s)]+)""")
+// inline tokens, in match order: ![alt](url) image | **bold** | [label](url) |
+// _italic_ | bare autolink (https://…). The image alt is FIRST so `![a](u)` is taken
+// as an image (consuming the `!`), not a link with a stray leading `!`. Images are
+// still never inline-loaded (OQ: host-gated async) — they degrade to a 🖼 + alt label
+// that links out (vetted) so the syntax never shows raw.
+private val INLINE = Regex("""!\[([^\]]+)]\(([^)]+)\)|\*\*(.+?)\*\*|\[([^\]]+)]\(([^)]+)\)|_([^_]+?)_|(https?://[^\s)]+)""")
 private val CHECKBOX = Regex("""^(\s*)[-*]\s+\[([ xX])]\s+(.*)$""")
 private val BULLET = Regex("""^(\s*)[-*]\s+(.*)$""")
 private val TABLE_ROW = Regex("""^\s*\|.*\|\s*$""")
@@ -93,17 +95,22 @@ private fun AnnotatedString.Builder.appendInline(text: String) {
     if (m.range.first < i) continue
     append(text.substring(i, m.range.first))
     when {
-      m.groupValues[1].isNotEmpty() ->
-        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(m.groupValues[1]) }
-      m.groupValues[3].isNotEmpty() -> {                      // [label](url)
-        val label = m.groupValues[2]; val url = m.groupValues[3]
+      m.groupValues[1].isNotEmpty() -> {                      // ![alt](url) image → 🖼 alt (links out, never inline-loaded)
+        val label = "🖼 ${m.groupValues[1]}"; val url = m.groupValues[2]
         if (schemeOf(url) in ALLOWED_SCHEMES) withLink(LinkAnnotation.Url(url, LINK_STYLE)) { append(label) }
         else append(label)
       }
-      m.groupValues[4].isNotEmpty() ->
-        withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(m.groupValues[4]) }
-      m.groupValues[5].isNotEmpty() -> {                      // bare autolink https://…
-        var url = m.groupValues[5]
+      m.groupValues[3].isNotEmpty() ->
+        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(m.groupValues[3]) }
+      m.groupValues[5].isNotEmpty() -> {                      // [label](url)
+        val label = m.groupValues[4]; val url = m.groupValues[5]
+        if (schemeOf(url) in ALLOWED_SCHEMES) withLink(LinkAnnotation.Url(url, LINK_STYLE)) { append(label) }
+        else append(label)
+      }
+      m.groupValues[6].isNotEmpty() ->
+        withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(m.groupValues[6]) }
+      m.groupValues[7].isNotEmpty() -> {                      // bare autolink https://…
+        var url = m.groupValues[7]
         // don't swallow trailing sentence punctuation into the URL ("…edu." / "…edu)")
         var end = url.length
         while (end > 0 && url[end - 1] in ".,;:!?") end--
