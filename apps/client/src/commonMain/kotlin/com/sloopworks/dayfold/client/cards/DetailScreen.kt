@@ -39,6 +39,13 @@ import com.sloopworks.dayfold.client.RelatedRef
 // vetted CardAction seam (CL-PLAT). RELATED rows = CL-8; the container-transform =
 // CL-7 (M0 is a plain feed↔detail swap). Reuses the CL-5 chrome (internal).
 
+// The card→hub deep-link target (ADR 0006/0022): the hub to cross to + the block to
+// highlight on arrival. `target_hub_id` wins over `hub_ref`; a blank/absent hub id
+// means no link. Pure so the signature value-prop glue is unit-tested, not just
+// inline in the Composable. Returns (hubId, focusBlockId?) or null = no deep-link.
+internal fun hubLinkTarget(card: Card): Pair<String, String?>? =
+  (card.targetHubId ?: card.hubRef)?.takeIf { it.isNotBlank() }?.let { it to card.targetBlockId }
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun DetailScreen(card: Card, onBack: () -> Unit, onAction: (CardAction) -> Unit) {
@@ -57,9 +64,9 @@ fun DetailScreen(card: Card, onBack: () -> Unit, onAction: (CardAction) -> Unit)
     ) {
       item { HeroMedia(card, onAction) }
       item { ActionsRow(detailActions(card), onAction) }
-      (card.targetHubId ?: card.hubRef)?.takeIf { it.isNotBlank() }?.let { hub ->
+      hubLinkTarget(card)?.let { (hub, focus) ->
         // cross-surface deep-link; target_block_id (when set) highlights on arrival
-        item { HubLink(onOpen = { onAction(CardAction.OpenHub(hub, card.targetBlockId)) }) }
+        item { HubLink(onOpen = { onAction(CardAction.OpenHub(hub, focus)) }) }
       }
       detailMeta(card).takeIf { it.isNotEmpty() }?.let { rows -> item { DetailsCard(rows) } }
       card.related?.takeIf { it.isNotEmpty() }?.let { rels ->
