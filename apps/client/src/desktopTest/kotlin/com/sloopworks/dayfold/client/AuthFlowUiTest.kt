@@ -225,4 +225,26 @@ class AuthFlowUiTest {
     onNodeWithTag("device-cancel").performClick()
     assertTrue(cancelled)
   }
+
+  // Multi-owner grant routing: the family selector decides WHICH family the device
+  // joins. Granting to the wrong family is a real correctness/security bug, and the
+  // selector tags (device-family-selector / device-family-<id>) were orphaned.
+  @Test fun switchingTheFamilySelectorRoutesTheGrantToTheChosenFamily() = runComposeUiTest {
+    var approvedFid: String? = null
+    val twoOwner = AppState(
+      session = Session("a", "r"),
+      families = listOf(
+        FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active"),
+        FamilyMembership("fam2", "Lake House", role = "owner", status = "active"),
+      ),
+      activeFamilyId = "fam1",                                  // default target
+      route = Route.AuthorizeDevice,
+      pendingDevice = PendingDevice("WDJF-7K2P", client = "Dayfold CLI", originKind = "residential"),
+    )
+    setContent { DayfoldTheme { AuthorizeDeviceScreen(twoOwner, onApprove = { approvedFid = it }) } }
+    onNodeWithTag("device-family-selector").performClick()      // open the picker
+    onNodeWithTag("device-family-fam2").performClick()          // choose the OTHER family
+    onNodeWithTag("device-approve").performClick()
+    assertEquals("fam2", approvedFid)                           // grant routes to the chosen family, not the default
+  }
 }
