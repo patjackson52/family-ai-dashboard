@@ -25,8 +25,13 @@ class Dayfold < Formula
   depends_on "openjdk@17"
 
   def install
-    # The release tarball extracts to dayfold-<version>/ containing bin/ + lib/.
-    libexec.install Dir["dayfold-*/*"]
+    # The release tarball has a single top-level dayfold-<version>/ dir (bin/ + lib/).
+    # Homebrew STRIPS that single root on extract, so the staged contents are bin/ +
+    # lib/ at the CWD root — handle both strip (normal) and no-strip defensively.
+    # (A bare `Dir["dayfold-*/*"]` matches nothing post-strip → empty libexec → the
+    # launcher can't find libexec/bin/dayfold. Verified against Homebrew 6.x.)
+    staged = Dir["dayfold-*"].first
+    libexec.install staged ? Dir["#{staged}/*"] : Dir["*"]
     # Wrap the dist launcher so the runtime is pinned — no user JAVA_HOME needed.
     (bin/"dayfold").write_env_script libexec/"bin/dayfold",
                                      JAVA_HOME: Language::Java.java_home("17")
