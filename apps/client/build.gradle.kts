@@ -58,6 +58,9 @@ kotlin {
         // by compose.ui transitively) — enables hardware/gesture back → NavBack.
         implementation("org.jetbrains.compose.ui:ui-backhandler:1.11.1")
       }
+      // Shared link rules (scheme allowlist + vetting + linkify) — stdlib-only source
+      // srcDir'd into commonMain AND the CLI so author-side and render-side never drift.
+      kotlin.srcDir("../../packages/linkrules")
     }
     val androidMain by getting {
       dependencies {
