@@ -33,6 +33,21 @@ class CardRenderTest {
     assertEquals(1, ok.getLinkAnnotations(0, ok.length).size)            // allowlisted → tappable
   }
 
+  // The XSS guard is schemeOf's NORMALIZATION (trim + lowercase). Every other test uses
+  // clean lowercase, so a tweak dropping .lowercase()/.trim() could silently let
+  // `JavaScript:`/` javascript:` through. Pin the evasion-resistance + the https-only
+  // choice + data: (a distinct vector). Untrusted markdown comes from the API/CLI.
+  @Test fun `scheme allowlist is normalized — resists case and whitespace evasion`() {
+    assertFalse(hasActionLinks("[x](JavaScript:alert(1))"))                       // mixed case
+    assertFalse(hasActionLinks("[x](JAVASCRIPT:alert(1))"))                       // upper case
+    assertFalse(hasActionLinks("[x]( javascript:alert(1))"))                      // leading whitespace
+    assertFalse(hasActionLinks("[x](data:text/html;base64,PHNjcmlwdD4=)"))        // data: vector
+    assertFalse(hasActionLinks("[x](http://insecure)"))                          // plain http is NOT allowlisted (https-only)
+    // legit links still match case-insensitively (the allowlist compare is normalized too)
+    assertTrue(hasActionLinks("[x](HTTPS://store.example)"))
+    assertTrue(hasActionLinks("[x](MAILTO:school@x.edu)"))
+  }
+
   @Test fun `kind + source labels`() {
     assertEquals("Action", kindLabel("action"))
     assertNull(kindLabel("info"))
