@@ -18,6 +18,10 @@ kotlin { jvmToolchain(17) }
 // source of truth — for local typed-card validation. No hand-dup, no drift.
 sourceSets["main"].kotlin.srcDir("../../packages/schema/kotlin-gen")
 
+// CL-LINK: the shared link rules (scheme allowlist + vetting + the author-side
+// linkifier) — same stdlib-only source the client commonMain uses. One copy, no drift.
+sourceSets["main"].kotlin.srcDir("../../packages/linkrules")
+
 // Distribution: the `application` plugin's installDist/distTar/distZip ship a
 // runnable tree (bin/<name> launcher + lib/*.jar). applicationName = "dayfold" so
 // the launcher is `bin/dayfold` (not the project name `cli`) — the Homebrew formula
