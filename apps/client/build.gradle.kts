@@ -45,6 +45,8 @@ kotlin {
         implementation(compose.foundation)
         implementation(compose.material3)
         implementation(compose.ui)
+        // CL-0b: bundled brand fonts (Outfit/Figtree) via Compose Resources (Res.font.*).
+        implementation(compose.components.resources)
         // CL-7: BackHandler / PredictiveBackHandler (separate artifact, not pulled
         // by compose.ui transitively) — enables hardware/gesture back → NavBack.
         implementation("org.jetbrains.compose.ui:ui-backhandler:1.11.1")
@@ -116,6 +118,13 @@ sqldelight {
 }
 
 compose.desktop { application { mainClass = "com.sloopworks.dayfold.client.MainKt" } }
+
+// Generated Res accessor for the bundled fonts (src/commonMain/composeResources/font/).
+compose.resources {
+  publicResClass = false
+  packageOfResClass = "com.sloopworks.dayfold.client.generated"
+  generateResClass = auto
+}
 
 // desktopTest reuses the JVM JUnit-platform setup the old jvm module had.
 tasks.named<Test>("desktopTest") { useJUnitPlatform() }
