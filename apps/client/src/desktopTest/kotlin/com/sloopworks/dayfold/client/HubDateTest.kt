@@ -61,4 +61,32 @@ class HubDateTest {
     // 22h apart but the SAME calendar day → still "Today"
     assertEquals("Today", countdownLabel("2026-06-24T23:00:00Z", "2026-06-24T01:00:00Z", utc))
   }
+
+  @Test fun labelUsesTheViewersLocalCalendarDateNotUtc() {
+    // The SAME two instants must label differently by timezone, because the badge
+    // compares LOCAL dates (the whole point of the calendar-day design). Every other
+    // test pins UTC, so this is the only guard a tz regression would trip.
+    val target = "2026-06-25T20:00:00Z"; val nowInstant = "2026-06-25T05:00:00Z"
+    // UTC: now=06-25, target=06-25 → same day → "Today".
+    assertEquals("Today", countdownLabel(target, nowInstant, utc))
+    // America/Los_Angeles (PDT −07): now→06-24 22:00, target→06-25 13:00 → "Tomorrow".
+    val pacific = kotlinx.datetime.TimeZone.of("America/Los_Angeles")
+    assertEquals("Tomorrow", countdownLabel(target, nowInstant, pacific))
+  }
+
+  @Test fun exactMidnightIsTheCleanCalendarBoundary() {
+    // one second before midnight vs midnight itself = different calendar days → "Tomorrow"
+    assertEquals("Tomorrow", countdownLabel("2026-06-25T00:00:00Z", "2026-06-24T23:59:59Z", utc))
+    // a midnight target earlier the same day → "Today" (not "Yesterday")
+    assertEquals("Today", countdownLabel("2026-06-24T00:00:00Z", "2026-06-24T23:59:59Z", utc))
+  }
+
+  @Test fun normalizeTsIsLenientAndFailsOpenOnNonsenseOffsets() {
+    // The regex reshapes "+2500" → "+25:00" (it doesn't range-check); Instant.parse
+    // then rejects the out-of-range offset, so the label degrades to null (no badge,
+    // no crash) instead of showing something bogus from a malformed DB row.
+    assertEquals("2026-06-24T12:00:00+25:00", normalizeTs("2026-06-24T12:00:00+2500"))
+    assertNull(countdownLabel("2026-06-24T12:00:00+2500", now, utc))   // un-parseable → null
+    assertNull(countdownLabel("2026-06-24T12:00:00+", now, utc))       // offset sign, no digits → null
+  }
 }
