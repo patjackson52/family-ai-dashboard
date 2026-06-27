@@ -9,13 +9,13 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.sp
 
 // Dayfold type scale (designs/Brand.dc.html): Outfit (display/headline/title,
-// weight 600, tight negative tracking) + Figtree (body/label). The SIZES,
-// WEIGHTS and TRACKING below are brand-accurate now; the actual Outfit/Figtree
-// typefaces are bundled in a follow (CL-0b — needs composeResources/font/),
-// so both families currently resolve to FontFamily.Default. Swap the two
-// params below to the bundled families and the whole scale inherits them.
-private val Outfit: FontFamily = FontFamily.Default // TODO(CL-0b): bundle Outfit
-private val Figtree: FontFamily = FontFamily.Default // TODO(CL-0b): bundle Figtree
+// weight 600, tight negative tracking) + Figtree (body/label). The SIZES, WEIGHTS
+// and TRACKING live here. The actual Outfit/Figtree typefaces are bundled (CL-0b)
+// and applied by `theme/Theme.kt` (`brandTypography()`, where Font(Res.font…) is
+// @Composable). This top-level `DayfoldTypography` keeps the scale on the default
+// family for non-Composable use + DayfoldThemeTest (which asserts sizes/weights).
+private val Outfit: FontFamily = FontFamily.Default
+private val Figtree: FontFamily = FontFamily.Default
 
 private fun em(value: Float) = TextUnit(value, TextUnitType.Em)
 
