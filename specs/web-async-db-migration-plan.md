@@ -37,9 +37,17 @@ completes immediately). So Android/desktop/iOS keep `AndroidSqliteDriver` /
      (line ~102) are inside the suspend `loadPage` (it `await`s `syncClient.fetchPage`) —
      just add `await`/keep them in scope. `activeCardsFlow().collect{…}` / `activeHubsFlow`
      unchanged.
-   - Any `wipe()` caller (logout/account-wipe) — confirm it's in a coroutine; wrap if not.
-   - Any `activeCards()` caller — confirm suspend context (grep before editing; it may be
-     unused outside the flow path).
+   - `wipe()` is called via a `clearCache: () -> Unit` lambda passed to `AuthEngine` (the
+     iOS/desktop/android shells pass `clearCache = { cs.wipe() }`). **Change `AuthEngine`'s
+     param to `suspend () -> Unit`** — both invocations are *already* suspend
+     (`AuthEngine.signOut()` line ~113, `loadMemberships()` line ~294), so the lambdas just
+     become suspend lambdas (Kotlin infers); no shell restructuring. **Confirmed clean.**
+   - `activeCards()` — **confirmed used only in tests** (real code reads `activeCardsFlow`).
+     `SyncEngineTest` already wraps every case in `runBlocking`, so the now-suspend
+     `applyDelta`/`activeCards`/`cursor` calls work as-is — **no test rewiring.**
+   - **The only compile-time unknown is the SQLDelight-async API itself** (the `transaction {}`
+     block under `generateAsync`, and the exact `awaitAsList`/`awaitAsOneOrNull`/`.await()`
+     names) — resolve by following the compiler.
 
 4. **Startup is unchanged.** The shells construct `ContentStore(DriverFactory().createDriver())`
    eagerly (desktop `Main.kt`, android `MainActivity`); `createDriver()` stays sync — only the
