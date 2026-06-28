@@ -50,6 +50,10 @@ For each agreed hub:
 - Start from `dayfold template hub` (and `section`, `block`), fill real fields,
   **show the operator the JSON**, push on approval:
   `dayfold push <id> hub.json --hub` (then `--section`, `--block` for children).
+- Add lightweight VISUAL enrichment for warmth + scanability: an `icon` + `accentColor`
+  on the hub's (or card's) `media` — no image URL needed, so nothing to allowlist (see
+  `references/content-model.md` → Visual enrichment). Hero/thumbnail IMAGES are allowlisted
+  + operator-surfaced (guardrail 8) — prefer icon+accent unless an image clearly earns it.
 
 For each signal worth surfacing **now**:
 - Author a BriefingCard of the right `type` from `dayfold template <type>`, set
