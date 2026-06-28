@@ -24,7 +24,20 @@ set -euo pipefail
 cd "$(dirname "$0")/.."                      # apps/
 
 ADB="${ADB:-$(command -v adb || echo "$HOME/Library/Android/sdk/platform-tools/adb")}"
-JAVA17="${JAVA17:-$(/usr/libexec/java_home -v 17)}"
+# Resolve a JDK 17 home. The Homebrew openjdk@17 keg isn't registered with
+# /usr/libexec/java_home, so prefer Homebrew's stable `opt` symlink, then fall
+# back to java_home, then a Cellar glob.
+resolve_java17() {
+  [ -n "${JAVA17:-}" ] && { echo "$JAVA17"; return; }
+  local p="/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
+  [ -x "$p/bin/java" ] && { echo "$p"; return; }
+  p="$(/usr/libexec/java_home -v 17 2>/dev/null || true)"
+  [ -n "$p" ] && { echo "$p"; return; }
+  p="$(ls -d /opt/homebrew/Cellar/openjdk@17/*/libexec/openjdk.jdk/Contents/Home 2>/dev/null | sort -V | tail -1 || true)"
+  echo "$p"
+}
+JAVA17="$(resolve_java17)"
+[ -x "$JAVA17/bin/java" ] || { echo "ERROR: no JDK 17 found. Set JAVA17=<jdk17 home> (Homebrew: brew install openjdk@17)."; exit 1; }
 APP_ID="com.sloopworks.dayfold"
 ACTIVITY="$APP_ID/com.sloopworks.dayfold.android.MainActivity"
 PROD_URL="https://family-ai-dashboard.vercel.app"
