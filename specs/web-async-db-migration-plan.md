@@ -49,23 +49,28 @@ Narrowed the "no such table" flake cheaply (without re-running the migration):
   `junit.jupiter…parallel` / `org.gradle.parallel` config anywhere — Gradle's `Test` default is
   serial (one fork). So the flake is **not** a cross-test in-memory-DB collision; disabling
   parallelism is a non-fix.
-- **Leading hypothesis: intra-test concurrent connection access.** Under `generateAsync` the
-  reactive flows still collect on `mapToList(Dispatchers.Default)` (a background thread) while
-  the suspend writes (`applyDelta`/`upsertHub`) run on the `runBlocking` thread. A single
-  JDBC SQLite connection is **not** safe for concurrent use from two threads; the old
-  *synchronous* path serialized every call so they never overlapped, but the async path lets a
-  flow query and a write touch the connection at the same instant → intermittent
-  `SQLITE_ERROR` (surfacing as "no such table" / a different test each run).
-- **Why this matters beyond tests:** the same shape exists in **production** — `SyncEngine`
-  writes on a coroutine while the UI collects `activeCardsFlow`/`activeHubsFlow` on
-  `Dispatchers.Default`. The sync drivers may tolerate it (their own locking) where JDBC does
-  not, but this must be confirmed, not assumed.
-- **First step for the dedicated session** (do this BEFORE the test sweep): confine all DB
-  access to a single dispatcher (e.g. a dedicated single-thread `CoroutineContext` the store
-  uses for every query/write, flows included) and re-run `:client:desktopTest` ~10× to confirm
-  the flake is gone. If confinement fixes it, that confinement is also the production-safety
-  story; if not, instrument the thread id + connection in `create()` vs the failing write to
-  find the true cause. Only then proceed to the main-code + test-conversion sweep above.
+- **CORRECTED root cause (probe-backed): a schema-create ordering race, NOT concurrent access.**
+  A throwaway probe stress-tested the *current* (sync) store with 60 concurrent `applyDelta`
+  writes + a concurrent flow read on its single JDBC connection. It failed **12/12** — but with
+  `SQLITE_ERROR: cannot start a transaction within a transaction`, i.e. a *transaction/locking*
+  error, **never** `no such table`. So concurrency produces a *different* error than the flake.
+  The migration flake's `no such table` means the table genuinely **isn't there yet** →
+  `ContentStore.create()`'s `ContentDb.Schema.create(driver)` (wrapped `.synchronous()`) did not
+  reliably finish creating the schema before the first write ran. That is a **create-ordering
+  race**, and the fix is to make `create()` **`suspend`** and **`.await()`** the schema build
+  (deterministic), NOT a dispatcher confinement.
+- **Separate finding from the probe (latent invariant, not a live bug):** the single JDBC
+  connection cannot run **concurrent transactions**. Production is safe today only because
+  `SyncEngine` serializes writes (one `applyDelta` at a time); a future change that parallelizes
+  writes would break this. The reactive *reads* (flows on `Dispatchers.Default`) overlap the
+  single writer but reads aren't transactions, so they don't hit this. Worth a guard/comment if
+  the write path ever changes — but it is **not** the web-migration flake.
+- **First step for the dedicated session (REVISED):** make `ContentStore.create()` `suspend` +
+  `ContentDb.Schema.create(driver).await()` (drop `.synchronous()` on the create path), thread
+  the suspend through the test helpers (`freshStore`/`store`/`freshContentStore` → suspend → their
+  tests `runBlocking`), then run `:client:desktopTest` ~10× to confirm `no such table` is gone.
+  Only then proceed to the main-code + test-conversion sweep above. (Earlier draft suggested a
+  single-dispatcher confinement first — the probe shows that would chase the wrong cause.)
 
 This is why the migration is a deliberate session, not a loop tick: it touches the data layer's
 concurrency model, and that must be understood + verified, not patched hopefully.
