@@ -37,6 +37,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 
 // AUTH-S5 T5 — the onboarding/identity screens (Dayfold, ADR 0008/0011/0023).
@@ -92,26 +94,31 @@ internal fun AuthButton(
   modifier: Modifier = Modifier,
   border: Color? = null,
   enabled: Boolean = true,
+  busy: Boolean = false,
   leading: @Composable (() -> Unit)? = null,
   onClick: () -> Unit = {},
 ) {
   val cs = MaterialTheme.colorScheme
+  val effectiveEnabled = enabled && !busy
   Box(
     modifier
       .fillMaxWidth()
       .height(54.dp)
       .clip(RoundedCornerShape(16.dp))
-      .background(if (enabled) container else cs.surfaceContainerHigh)
+      .background(if (effectiveEnabled) container else cs.surfaceContainerHigh)
       .then(if (border != null) Modifier.border(1.dp, border, RoundedCornerShape(16.dp)) else Modifier)
-      .clickable(enabled = enabled, onClick = onClick),
+      .clickable(enabled = effectiveEnabled, onClick = onClick)
+      .semantics { if (busy) stateDescription = "Busy" },
     contentAlignment = Alignment.Center,
   ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-      if (leading != null) leading()
+      if (busy) {
+        CircularProgressIndicator(strokeWidth = 2.dp, color = content, modifier = Modifier.size(20.dp))
+      } else if (leading != null) leading()
       Text(
         text,
         style = MaterialTheme.typography.labelLarge,
-        color = if (enabled) content else cs.onSurfaceVariant,
+        color = if (effectiveEnabled || busy) content else cs.onSurfaceVariant,
       )
     }
   }
@@ -143,13 +150,7 @@ internal fun AppleGlyph(tint: Color) {
 // ── Splash (cold-start, restoring the session) ──
 @Composable
 fun SplashScreen() {
-  val cs = MaterialTheme.colorScheme
-  Box(Modifier.fillMaxSize().background(cs.surface), contentAlignment = Alignment.Center) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-      DayfoldMark(size = 64)
-      CircularProgressIndicator(color = cs.primary, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
-    }
-  }
+  com.sloopworks.dayfold.client.ui.loading.FullScreenLoading { DayfoldMark(size = 64) }
 }
 
 // ── Auth error / recovery ──
@@ -183,13 +184,14 @@ fun AuthErrorScreen(
 // ── Sign in ──
 @Composable
 fun SignInScreen(
-  busy: Boolean = false,
+  pendingProvider: String? = null,
   error: String? = null,
   onProvider: (String) -> Unit = {},
   // Debug-only fake sign-in: non-null only when the platform shell wires it
   // (BuildConfig.DEBUG on Android, always on desktop, omitted on iOS/release).
   onDevSignIn: (() -> Unit)? = null,
 ) {
+  val busy = pendingProvider != null
   val cs = MaterialTheme.colorScheme
   Column(
     Modifier.fillMaxSize().background(cs.surface).padding(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 30.dp),
@@ -218,17 +220,17 @@ fun SignInScreen(
       }
       AuthButton(
         "Continue with Google", container = cs.surfaceContainerLowest, content = cs.onSurface,
-        border = cs.outlineVariant, enabled = !busy, leading = { GoogleGlyph() },
+        border = cs.outlineVariant, enabled = !busy, busy = pendingProvider == "google", leading = { GoogleGlyph() },
         onClick = { onProvider("google") },
       )
       AuthButton(
         "Continue with Apple", container = cs.onSurface, content = cs.surface,
-        enabled = !busy, leading = { AppleGlyph(cs.surface) }, onClick = { onProvider("apple") },
+        enabled = !busy, busy = pendingProvider == "apple", leading = { AppleGlyph(cs.surface) }, onClick = { onProvider("apple") },
       )
       onDevSignIn?.let { dev ->
         AuthButton(
           "Dev sign-in (fake)", container = cs.surfaceContainerLowest, content = cs.onSurfaceVariant,
-          border = cs.outlineVariant, enabled = !busy, onClick = dev,
+          border = cs.outlineVariant, enabled = !busy, busy = pendingProvider == "dev", onClick = dev,
         )
       }
       Spacer(Modifier.height(2.dp))

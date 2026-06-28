@@ -52,9 +52,13 @@ class FeedScreenTest {
   }
 
   @Test
-  fun showsSyncingStatus() = runComposeUiTest {
+  fun showsSkeletonWhileSyncing() = runComposeUiTest {
+    // empty + syncing now renders the FeedSkeleton (liveRegion "Loading your day")
+    // after rememberStableLoading's ~200ms debounce; waitForIdle drives the delay.
     setContent { MaterialTheme { FeedScreen(AppState(syncing = true)) } }
-    // #164: first-load-no-cache now shows a calm skeleton (not a bare "Syncing…" text)
+    // #164 SyncingState skeleton ("Catching up on your day"), now gated by the
+    // loading-states rememberStableLoading ~200ms anti-flash debounce.
+    mainClock.advanceTimeBy(250)   // past the 200ms debounce
     onNodeWithContentDescription("Catching up on your day").assertIsDisplayed()
   }
 

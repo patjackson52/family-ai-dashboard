@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -69,19 +71,28 @@ internal fun PillButton(
   modifier: Modifier = Modifier,
   border: Color? = null,
   enabled: Boolean = true,
+  busy: Boolean = false,
   onClick: () -> Unit = {},
 ) {
   val cs = MaterialTheme.colorScheme
+  val effectiveEnabled = enabled && !busy
   Box(
     modifier
       .height(52.dp)
       .clip(RoundedCornerShape(16.dp))
-      .background(if (enabled) container else cs.surfaceContainerHigh)
+      .background(if (effectiveEnabled) container else cs.surfaceContainerHigh)
       .then(if (border != null) Modifier.border(1.5.dp, border, RoundedCornerShape(16.dp)) else Modifier)
-      .clickable(enabled = enabled, onClick = onClick),
+      .clickable(enabled = effectiveEnabled, onClick = onClick)
+      .semantics { if (busy) stateDescription = "Busy" },
     contentAlignment = Alignment.Center,
   ) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = if (enabled) content else cs.onSurfaceVariant)
+    androidx.compose.foundation.layout.Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(9.dp),
+    ) {
+      if (busy) androidx.compose.material3.CircularProgressIndicator(strokeWidth = 2.dp, color = content, modifier = Modifier.size(18.dp))
+      Text(text, style = MaterialTheme.typography.titleSmall, color = if (effectiveEnabled || busy) content else cs.onSurfaceVariant)
+    }
   }
 }
 
@@ -197,8 +208,8 @@ fun EnterCodeScreen(
     }
     Spacer(Modifier.weight(1f))
     PillButton(
-      if (state.deviceBusy) "Checking…" else "Continue",
-      container = cs.primary, content = cs.onPrimary, enabled = ready,
+      "Continue",
+      container = cs.primary, content = cs.onPrimary, enabled = ready, busy = state.deviceBusy,
       modifier = Modifier.fillMaxWidth().testTag("device-continue"), onClick = { submit() },
     )
   }
@@ -327,8 +338,7 @@ fun AuthorizeDeviceScreen(
           onClick = { selectedFid?.let { onDeny(it) } },
         )
         PillButton(
-          if (state.deviceBusy) "Working…" else "Approve",
-          container = cs.primary, content = cs.onPrimary, enabled = canApprove,
+          "Approve", container = cs.primary, content = cs.onPrimary, enabled = canApprove, busy = state.deviceBusy,
           modifier = Modifier.weight(1.2f).testTag("device-approve"),
           onClick = { selectedFid?.let { onApprove(it) } },
         )

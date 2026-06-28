@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.datetime.toLocalDateTime
 import com.sloopworks.dayfold.client.cards.CardAction
 import com.sloopworks.dayfold.client.cards.TypedCardItem
+import com.sloopworks.dayfold.client.ui.loading.rememberStableLoading
 
 // M0 feed-only render: the briefing-card list from redux state. Shared
 // Composable (commonMain-compatible) — the Android/iOS/desktop shells host it.
@@ -87,8 +88,10 @@ fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccou
       // in state on the Now surface (SyncEngine watches activeHubsFlow; roster loads at session).
       val established = state.hubs.isNotEmpty() || state.members.size > 1
       when {
-        // first load, no cache → calm skeleton (not a spinner-in-a-void)
-        state.syncing -> SyncingState(Modifier.padding(pad))
+        // first load, no cache → calm skeleton (not a spinner-in-a-void), debounced so a
+        // fast sync never flashes the skeleton or the onboarding state (loading-states PR).
+        rememberStableLoading(state.syncing) -> SyncingState(Modifier.padding(pad))
+        state.syncing -> Unit   // pre-debounce window: render nothing, not the onboarding state
         else -> Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
           when {
             state.error != null -> EmptyFeedError(state.error, onRefresh)                          // offline / sync error
@@ -98,19 +101,20 @@ fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccou
         }
       }
     } else {
-      LazyColumn(
-        Modifier.fillMaxSize().padding(pad),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+      androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = state.syncing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize().padding(pad),
       ) {
-        // A sync failure with cached cards was silent before — surface a calm,
-        // non-alarming banner with a retry instead of showing stale cards as if fresh.
-        if (state.error != null) item(key = "sync-error") { RefreshErrorBanner(onRefresh) }
-        // CL-5: typed cards dispatch by type; kind-only/legacy cards keep the
-        // generic CardItem (back-compat — unknown types render via the typed
-        // dispatcher's safe generic fallback, never crash).
-        items(feedCards(state, kotlin.time.Clock.System.now().toString()), key = { it.id }) { card ->
-          if (card.type != null) TypedCardItem(card, onAction) else CardItem(card)
+        LazyColumn(
+          Modifier.fillMaxSize(),
+          contentPadding = PaddingValues(16.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+          if (state.error != null) item(key = "sync-error") { RefreshErrorBanner(onRefresh) }
+          items(feedCards(state, kotlin.time.Clock.System.now().toString()), key = { it.id }) { card ->
+            if (card.type != null) TypedCardItem(card, onAction) else CardItem(card)
+          }
         }
       }
     }

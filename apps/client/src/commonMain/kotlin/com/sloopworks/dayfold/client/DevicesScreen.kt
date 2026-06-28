@@ -27,6 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.sloopworks.dayfold.client.ui.loading.ErrorRetry
+import com.sloopworks.dayfold.client.ui.loading.ListSkeleton
+import com.sloopworks.dayfold.client.ui.loading.RowBusy
 
 // AUTH-S6 — Connected devices & apps (Dayfold, A8b `devices`). The caller's own
 // sessions + CLI grants; revoke any except this one. onLoad pulls the list on
@@ -75,15 +78,19 @@ fun DevicesScreen(
         }
       }
       Spacer(Modifier.height(9.dp))
-      Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        state.devices.forEach { d -> DeviceRow(d, onRevoke) }
+      when {
+        state.devices.isEmpty() && state.deviceListBusy -> ListSkeleton(rows = 3, modifier = Modifier.padding(top = 4.dp))
+        state.devices.isEmpty() && state.deviceListError != null -> ErrorRetry(state.deviceListError, onRetry = onLoad)
+        else -> Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+          state.devices.forEach { d -> DeviceRow(d, busy = d.id == state.deviceOpId, anyBusy = state.deviceOpId != null, onRevoke) }
+        }
       }
     }
   }
 }
 
 @Composable
-private fun DeviceRow(d: DeviceCredential, onRevoke: (String) -> Unit) {
+private fun DeviceRow(d: DeviceCredential, busy: Boolean, anyBusy: Boolean, onRevoke: (String) -> Unit) {
   val cs = MaterialTheme.colorScheme
   Row(
     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer).padding(14.dp),
@@ -106,9 +113,9 @@ private fun DeviceRow(d: DeviceCredential, onRevoke: (String) -> Unit) {
       }
     }
     if (!d.current) {
-      Box(
+      if (busy) RowBusy() else Box(
         Modifier.clip(RoundedCornerShape(50)).background(cs.surfaceContainerHigh)
-          .testTag("revoke-${d.id}").clickable { onRevoke(d.id) }.padding(horizontal = 13.dp, vertical = 7.dp),
+          .testTag("revoke-${d.id}").clickable(enabled = !anyBusy) { onRevoke(d.id) }.padding(horizontal = 13.dp, vertical = 7.dp),
       ) { Text("Revoke", style = MaterialTheme.typography.labelLarge, color = cs.error) }
     }
   }

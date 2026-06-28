@@ -120,7 +120,7 @@ fun FeedApp(
       // of the plain sign-in (same providers; resumes onto AuthorizeDevice after).
       Route.SignIn ->
         if (state.pendingDeviceLink != null) DeviceResumeScreen(onProvider = onSignIn)
-        else SignInScreen(busy = state.authBusy, error = state.authError, onProvider = onSignIn, onDevSignIn = onDevSignIn)
+        else SignInScreen(pendingProvider = state.pendingProvider, error = state.authError, onProvider = onSignIn, onDevSignIn = onDevSignIn)
       Route.AuthError -> AuthErrorScreen(message = state.authError, onRetry = onRetry, onSignOut = onSignOut)
       Route.CreateFamily -> CreateFamilyScreen(
         busy = state.authBusy, error = state.authError,
@@ -164,7 +164,7 @@ fun FeedApp(
         else -> AuthorizeDeviceScreen(state, onApprove = onApproveDevice, onDeny = onDenyDevice, onCancel = { store.dispatch(CloseDeviceFlow) })
       }
       Route.Account -> AccountScreen(
-        state, onSignOut = onSignOut, onClose = { store.dispatch(CloseAccount) },
+        state, signOutBusy = state.signOutBusy, onSignOut = onSignOut, onClose = { store.dispatch(CloseAccount) },
         onOpenMembers = { store.dispatch(OpenMembers) },
         onOpenDevices = { store.dispatch(OpenDevices) },
       )
@@ -233,10 +233,11 @@ private fun HubsHost(store: Store<AppState>, state: AppState, onLoadHubs: () -> 
       HubDetailScreen(
         state, onBack = { onCloseHub(); store.dispatch(CloseHub) }, onNow = { store.dispatch(OpenFeed) },
         onOpenAudience = { state.currentHubId?.let { store.dispatch(OpenAudienceSheet); onLoadAudience(it) } },
+        onRetry = { state.currentHubId?.let { id -> onOpenHub(id, null) } },
       )
     } else {
-      HubListScreen(state, onOpenHub = { onOpenHub(it, null) }, onNow = { store.dispatch(OpenFeed) }, onFilter = { store.dispatch(SetHubFilter(it)) })
+      HubListScreen(state, onOpenHub = { onOpenHub(it, null) }, onNow = { store.dispatch(OpenFeed) }, onFilter = { store.dispatch(SetHubFilter(it)) }, onRetry = onLoadHubs)
     }
-    if (state.audienceSheetOpen) WhoCanSeeSheet(state, onClose = { store.dispatch(CloseAudienceSheet) })  // overlay
+    if (state.audienceSheetOpen) WhoCanSeeSheet(state, onClose = { store.dispatch(CloseAudienceSheet) }, onRetryAudience = { state.currentHubId?.let { onLoadAudience(it) } })  // overlay
   }
 }

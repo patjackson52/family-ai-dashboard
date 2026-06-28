@@ -28,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -112,14 +114,21 @@ private fun ColumnScope.JoinEntry(busy: Boolean, onJoin: (String) -> Unit) {
   Box(
     Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(16.dp))
       .background(if (!busy && token.isNotBlank()) cs.primary else cs.surfaceContainerHigh)
-      .clickable(enabled = !busy && token.isNotBlank()) { onJoin(inviteTokenOf(token)) },
+      .clickable(enabled = !busy && token.isNotBlank()) { onJoin(inviteTokenOf(token)) }
+      .semantics { if (busy) stateDescription = "Busy" },
     contentAlignment = Alignment.Center,
   ) {
-    Text(
-      if (busy) "Joining…" else "Join",
-      style = MaterialTheme.typography.labelLarge,
-      color = if (!busy && token.isNotBlank()) cs.onPrimary else cs.onSurfaceVariant,
-    )
+    androidx.compose.foundation.layout.Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(9.dp),
+    ) {
+      if (busy) androidx.compose.material3.CircularProgressIndicator(strokeWidth = 2.dp, color = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+      Text(
+        "Join",
+        style = MaterialTheme.typography.labelLarge,
+        color = if (!busy && token.isNotBlank()) cs.onPrimary else cs.onSurfaceVariant,
+      )
+    }
   }
 }
 

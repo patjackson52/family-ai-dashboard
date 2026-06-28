@@ -41,6 +41,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.sloopworks.dayfold.client.ui.loading.ErrorRetry
+import com.sloopworks.dayfold.client.ui.loading.ListSkeleton
 
 // ── Hubs surface (ADR 0006 render · ADR 0030 visibility) ─────────────────────
 // f(state)→UI. Rich per-type block rendering (checklist boxes, budget bars, maps)
@@ -73,6 +75,7 @@ fun HubListScreen(
   onOpenHub: (String) -> Unit = {},
   onNow: () -> Unit = {},
   onFilter: (String) -> Unit = {},
+  onRetry: () -> Unit = {},
 ) {
   val shown = state.hubs.filter { when (state.hubFilter) { "active" -> it.status == "active"; "planning" -> it.status == "planning"; else -> true } }
   Scaffold(
@@ -88,8 +91,9 @@ fun HubListScreen(
         }
       }
       when {
-        state.hubs.isEmpty() && state.hubsBusy ->
-          Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Loading hubs…") }
+        state.hubs.isEmpty() && state.hubsBusy -> ListSkeleton(rows = 4, modifier = Modifier.fillMaxSize())
+        state.hubs.isEmpty() && state.hubError != null ->
+          Box(Modifier.fillMaxSize(), Alignment.Center) { ErrorRetry(state.hubError, onRetry = onRetry) }
         state.hubs.isEmpty() ->
           Box(Modifier.fillMaxSize(), Alignment.Center) {
             Text(
@@ -202,6 +206,7 @@ fun HubDetailScreen(
   onBack: () -> Unit = {},
   onNow: () -> Unit = {},
   onOpenAudience: () -> Unit = {},
+  onRetry: () -> Unit = {},
 ) {
   val tree = state.currentHubTree
   Scaffold(
@@ -219,9 +224,9 @@ fun HubDetailScreen(
     bottomBar = { DayfoldBottomNav(hubsActive = true, onNow = onNow, onHubs = {}) },
   ) { pad ->
     when {
-      tree == null && state.hubsBusy -> Box(Modifier.fillMaxSize().padding(pad), Alignment.Center) { Text("Loading…") }
+      tree == null && state.hubsBusy -> ListSkeleton(rows = 5, modifier = Modifier.fillMaxSize().padding(pad))
       tree == null -> Box(Modifier.fillMaxSize().padding(pad), Alignment.Center) {
-        Text(state.hubError ?: "Hub unavailable", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(40.dp))
+        ErrorRetry(state.hubError ?: "Hub unavailable", onRetry = onRetry)
       }
       else -> {
       val listState = rememberLazyListState()
@@ -340,7 +345,7 @@ fun focusedBlockItemIndex(tree: HubTree, focusBlockId: String?, hasCountdown: Bo
 // only at MVP — in-app editing of the allow-list is push/CLI (OQ-hub-collab). A
 // scrim + bottom panel; the roster shows permitted (filled check) vs hidden (ring).
 @Composable
-fun WhoCanSeeSheet(state: AppState, onClose: () -> Unit = {}) {
+fun WhoCanSeeSheet(state: AppState, onClose: () -> Unit = {}, onRetryAudience: () -> Unit = {}) {
   val aud = state.currentHubAudience
   Box(Modifier.fillMaxSize()) {
     // scrim
@@ -356,10 +361,12 @@ fun WhoCanSeeSheet(state: AppState, onClose: () -> Unit = {}) {
           "Private hubs are visible only to the people you pick. The family owner isn't added automatically.",
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (aud == null) {
-          Text("Loading…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-          aud.members.forEach { m -> AudienceRow(m, isYou = m.uid == state.session?.userId) }
+        when {
+          state.audienceError != null ->
+            ErrorRetry(state.audienceError, onRetry = onRetryAudience)
+          aud == null ->
+            androidx.compose.material3.CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+          else -> aud.members.forEach { m -> AudienceRow(m, isYou = m.uid == state.session?.userId) }
         }
         Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(14.dp)) {
           Text(

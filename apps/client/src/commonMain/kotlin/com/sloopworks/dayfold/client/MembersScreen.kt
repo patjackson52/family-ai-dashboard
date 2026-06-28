@@ -29,6 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sloopworks.dayfold.client.ui.loading.ErrorRetry
+import com.sloopworks.dayfold.client.ui.loading.ListSkeleton
+import com.sloopworks.dayfold.client.ui.loading.RowBusy
 
 // AUTH-S6 — the family members/approvals surface (Dayfold, A8b `members`). The
 // owner-approval queue (approve/decline closes invitee-join) + the active roster
@@ -66,21 +69,24 @@ fun MembersScreen(
       if (state.pendingApprovals.isNotEmpty()) {
         Label("PENDING APPROVAL · ${state.pendingApprovals.size}", cs.primary)
         Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-          state.pendingApprovals.forEach { p -> PendingRow(p, onApprove, onDecline) }
+          state.pendingApprovals.forEach { p -> PendingRow(p, busy = p.uid == state.memberOpId, anyBusy = state.memberOpId != null, onApprove, onDecline) }
         }
         Spacer(Modifier.height(22.dp))
       }
 
       Label("MEMBERS", cs.onSurfaceVariant)
-      if (state.members.isNotEmpty()) {
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-          state.members.forEach { m -> MemberRow(m, isOwner = m.role == "owner", onRemove = onRemoveMember) }
-        }
-      } else {
-        // fallback before the roster loads — the caller's own row.
-        MemberRow(
+      when {
+        state.members.isEmpty() && state.rosterBusy -> ListSkeleton(rows = 3)
+        state.members.isEmpty() && state.rosterError != null -> ErrorRetry(state.rosterError, onRetry = onLoadMembers)
+        state.members.isNotEmpty() ->
+          Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            state.members.forEach { m ->
+              MemberRow(m, isOwner = m.role == "owner", busy = m.uid == state.memberOpId, anyBusy = state.memberOpId != null, onRemove = onRemoveMember)
+            }
+          }
+        else -> MemberRow(
           FamilyMember(uid = "me", displayName = "You", role = me?.role ?: "adult"),
-          isOwner = me?.role == "owner", onRemove = {},
+          isOwner = me?.role == "owner", busy = false, anyBusy = false, onRemove = {},
         )
       }
     }
@@ -88,7 +94,7 @@ fun MembersScreen(
 }
 
 @Composable
-private fun MemberRow(m: FamilyMember, isOwner: Boolean, onRemove: (String) -> Unit) {
+private fun MemberRow(m: FamilyMember, isOwner: Boolean, busy: Boolean, anyBusy: Boolean, onRemove: (String) -> Unit) {
   val cs = MaterialTheme.colorScheme
   Row(
     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer).padding(13.dp),
@@ -102,9 +108,9 @@ private fun MemberRow(m: FamilyMember, isOwner: Boolean, onRemove: (String) -> U
     if (isOwner) {
       RoleBadge("OWNER")          // owners can't be removed (≥1-owner invariant)
     } else {
-      Box(
+      if (busy) RowBusy() else Box(
         Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(cs.surfaceContainerHigh)
-          .testTag("remove-${m.uid}").clickable { onRemove(m.uid) }
+          .testTag("remove-${m.uid}").clickable(enabled = !anyBusy) { onRemove(m.uid) }
           .semantics { contentDescription = "Remove ${m.displayName ?: "member"}" },
         contentAlignment = Alignment.Center,
       ) { Text("✕", color = cs.error, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clearAndSetSemantics {}) }
@@ -113,7 +119,7 @@ private fun MemberRow(m: FamilyMember, isOwner: Boolean, onRemove: (String) -> U
 }
 
 @Composable
-private fun PendingRow(p: PendingMember, onApprove: (String) -> Unit, onDecline: (String) -> Unit) {
+private fun PendingRow(p: PendingMember, busy: Boolean, anyBusy: Boolean, onApprove: (String) -> Unit, onDecline: (String) -> Unit) {
   val cs = MaterialTheme.colorScheme
   Row(
     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainer)
@@ -125,20 +131,22 @@ private fun PendingRow(p: PendingMember, onApprove: (String) -> Unit, onDecline:
       Text(p.displayName ?: "Someone", style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
       Text("Invited as ${p.role}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
     }
-    // decline — glyph-only; label it (✕ vs ✓ are dangerously ambiguous to a reader)
-    Box(
-      Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(cs.surfaceContainerHigh)
-        .testTag("decline-${p.uid}").clickable { onDecline(p.uid) }
-        .semantics { contentDescription = "Decline ${p.displayName ?: "request"}" },
-      contentAlignment = Alignment.Center,
-    ) { Text("✕", color = cs.error, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clearAndSetSemantics {}) }
-    // approve
-    Box(
-      Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(cs.primary)
-        .testTag("approve-${p.uid}").clickable { onApprove(p.uid) }
-        .semantics { contentDescription = "Approve ${p.displayName ?: "request"}" },
-      contentAlignment = Alignment.Center,
-    ) { Text("✓", color = cs.onPrimary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clearAndSetSemantics {}) }
+    if (busy) {
+      RowBusy()
+    } else {
+      Box(
+        Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(cs.surfaceContainerHigh)
+          .testTag("decline-${p.uid}").clickable(enabled = !anyBusy) { onDecline(p.uid) }
+          .semantics { contentDescription = "Decline ${p.displayName ?: "request"}" },
+        contentAlignment = Alignment.Center,
+      ) { Text("✕", color = cs.error, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clearAndSetSemantics {}) }
+      Box(
+        Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(cs.primary)
+          .testTag("approve-${p.uid}").clickable(enabled = !anyBusy) { onApprove(p.uid) }
+          .semantics { contentDescription = "Approve ${p.displayName ?: "request"}" },
+        contentAlignment = Alignment.Center,
+      ) { Text("✓", color = cs.onPrimary, style = MaterialTheme.typography.labelLarge, modifier = Modifier.clearAndSetSemantics {}) }
+    }
   }
 }
 
