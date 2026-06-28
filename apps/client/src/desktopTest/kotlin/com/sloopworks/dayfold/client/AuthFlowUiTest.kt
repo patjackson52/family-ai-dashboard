@@ -223,6 +223,15 @@ class AuthFlowUiTest {
     assertEquals("fam1", approvedFid)   // grants to the selected owner family, not e.g. the user_code
   }
 
+  @Test fun approveDisabledWhileDeviceBusy() = runComposeUiTest {
+    // Authorizing a device GRANTS account access — a double-approve (a second tap while the
+    // first request is in flight) must be impossible. canApprove = … && !deviceBusy, so an
+    // in-flight approval disables the Authorize button. The approve-wiring test above only
+    // covers the non-busy case; this pins the double-grant guard (#223 loading states).
+    setContent { DayfoldTheme { AuthorizeDeviceScreen(authorizeState("residential").copy(deviceBusy = true)) } }
+    onNodeWithTag("device-approve").assertIsNotEnabled()
+  }
+
   @Test fun denyInvokesOnDenyForTheSelectedFamily() = runComposeUiTest {
     var deniedFid: String? = null
     setContent { DayfoldTheme { AuthorizeDeviceScreen(authorizeState("residential"), onDeny = { deniedFid = it }) } }
