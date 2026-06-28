@@ -67,12 +67,44 @@ class AuthScreensSnapshotTest {
       ),
     ))
   }
+  @Test fun membersLoading() = snap("members-loading") {
+    MembersScreen(AppState(
+      families = listOf(FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active")),
+      activeFamilyId = "fam1", rosterBusy = true,
+    ))
+  }
+  @Test fun membersError() = snap("members-error") {
+    MembersScreen(AppState(
+      families = listOf(FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active")),
+      activeFamilyId = "fam1", rosterError = "Couldn't load members. Try again.",
+    ))
+  }
+  @Test fun membersRowBusy() = snap("members-row-busy") {
+    MembersScreen(AppState(
+      families = listOf(FamilyMembership("fam1", "The Jacksons", role = "owner", status = "active")),
+      activeFamilyId = "fam1",
+      pendingApprovals = listOf(PendingMember("u9", "Sam Rivera")),
+      members = listOf(FamilyMember("u1", "Pat Jackson", role = "owner", status = "active")),
+      memberOpId = "u9",
+    ))
+  }
 
   @Test fun devices() = snap("auth-devices") {
     DevicesScreen(AppState(devices = listOf(
       DeviceCredential("c1", kind = "app", label = "iPhone 15 Pro", current = true),
       DeviceCredential("c2", kind = "cli", label = "claude-code · CI", lastUsedAt = "2026-06-19T09:00:00Z", lastUsedIp = "San Jose"),
     )))
+  }
+  @Test fun devicesLoading() = snap("devices-loading") { DevicesScreen(AppState(deviceListBusy = true)) }
+  @Test fun devicesError() = snap("devices-error") { DevicesScreen(AppState(deviceListError = "Couldn't load devices. Try again.")) }
+  @Test fun devicesRowBusy() = snap("devices-row-busy") {
+    DevicesScreen(AppState(
+      devices = listOf(
+        DeviceCredential("c1", kind = "app", label = "iPhone 15 Pro", current = true),
+        DeviceCredential("c2", kind = "cli", label = "claude-code · CI"),
+      ),
+      deviceOpId = "c2",
+    ))
   }
 
   // ── CLI/device approval (S6-D) — A8b entercode/authorizedevice/devicedenied/deviceexpired ──
