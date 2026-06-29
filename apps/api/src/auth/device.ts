@@ -64,11 +64,12 @@ export async function redeem(device_code: string, mintAccess: (a:{sub:string;cid
     const cid = credId();
     await client.query(
       `INSERT INTO credentials(id,user_id,family_scope,kind,scopes,label)
-       VALUES ($1,$2,$3,'cli','{content:read,content:write}', 'dayfold-cli '||left(coalesce($4,''),64))`,
+       VALUES ($1,$2,$3,'cli','{content:read,content:write,content:delete}', 'dayfold-cli '||left(coalesce($4,''),64))`,
       [cid, user_id, family_id, origin_ua],
     );
     const { grantScopes } = await import("./scope.ts");          // ADR 0029 grant rows (interim default)
-    await grantScopes(cid, ["content:read", "content:write"], client);
+    // content:delete (W4): the CLI/loop authoring path can delete (author-gate exempts it).
+    await grantScopes(cid, ["content:read", "content:write", "content:delete"], client);
     const refresh = await issueRefresh(cid, client);
     await client.query(`UPDATE device_authorizations SET credential_id=$1 WHERE device_code=$2`, [cid, device_code]);
     await client.query("COMMIT");

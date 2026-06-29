@@ -112,6 +112,24 @@ export async function softDeleteHub(familyId: string, id: string) {
   } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
 }
 
+// W4 (ADR 0038): soft-delete a single block (tombstone via deleted_at; cleartext, so
+// E2EE-clean and it drives keyset cache-eviction on /sync). Returns false if the block
+// was already absent/tombstoned (the route maps that to 404 / idempotent 204).
+export async function softDeleteBlock(familyId: string, id: string): Promise<boolean> {
+  const r = await q(`UPDATE blocks SET deleted_at=now() WHERE family_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING id`, [familyId, id]);
+  return (r.rowCount ?? 0) > 0;
+}
+
+// A block row in ANY state (incl. tombstoned), with the author + parent section — the
+// W4 delete route needs created_by (author-gate) + section_id (hub-visibility gate)
+// before it can decide, so it can't use getBlock (which filters live rows only).
+export async function blockForDelete(familyId: string, id: string): Promise<{ section_id: string; created_by: string | null; deleted: boolean } | null> {
+  const r = await q(`SELECT section_id, created_by, deleted_at FROM blocks WHERE family_id=$1 AND id=$2`, [familyId, id]);
+  if (r.rowCount === 0) return null;
+  const row = r.rows[0];
+  return { section_id: row.section_id, created_by: row.created_by ?? null, deleted: row.deleted_at != null };
+}
+
 // hub tree (hub + live sections + live blocks). Caller must already be checked
 // visible on the hub (the route 404s otherwise).
 export async function getHubTree(familyId: string, hubId: string) {
@@ -181,14 +199,17 @@ export async function getBlock(familyId: string, id: string) {
 // instead of silently resurrecting a tombstoned block.
 export async function upsertBlock(
   familyId: string, id: string, sectionId: string, b: any,
-  opts: { allowResurrect?: boolean } = {},
+  opts: { allowResurrect?: boolean; createdBy?: string | null } = {},
 ) {
   const allowResurrect = opts.allowResurrect !== false;
   const live = await q(`SELECT 1 FROM sections WHERE family_id=$1 AND id=$2 AND deleted_at IS NULL`, [familyId, sectionId]);
   if (live.rowCount === 0) return null;
+  // created_by is set ONCE at creation (the INSERT) and never touched by the DO UPDATE —
+  // so a member toggling/editing a loop-authored block can never claim its authorship.
+  // It is the substrate the W4 delete author-gate keys on (ADR 0038 §W4 / the W2 stamp).
   const r = await q(
-    `INSERT INTO blocks (id, family_id, section_id, type, payload, body_md, body_ref, provenance, triggers, actions, ord, version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1)
+    `INSERT INTO blocks (id, family_id, section_id, type, payload, body_md, body_ref, provenance, triggers, actions, ord, created_by, version)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1)
      ON CONFLICT (family_id, id) DO UPDATE SET
        section_id=EXCLUDED.section_id, type=EXCLUDED.type, payload=EXCLUDED.payload,
        body_md=EXCLUDED.body_md, body_ref=EXCLUDED.body_ref, provenance=EXCLUDED.provenance,
@@ -197,6 +218,6 @@ export async function upsertBlock(
        ${allowResurrect ? "" : "WHERE blocks.deleted_at IS NULL"}
      RETURNING *`,
     [id, familyId, sectionId, b.type, J(b.payload), b.body_md ?? null, b.body_ref ?? null,
-     J(b.provenance), J(b.triggers), J(b.actions), b.ord ?? 0]);
+     J(b.provenance), J(b.triggers), J(b.actions), b.ord ?? 0, opts.createdBy ?? null]);
   return r.rows[0] ?? null;
 }

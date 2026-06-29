@@ -72,10 +72,12 @@ app.post("/auth/dev-token", async (c) => {
   // Insert a null-family-scope app credential for this user
   const credentialId = "cred_" + Math.random().toString(16).slice(2);
   await q(
-    `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write}')`,
+    `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write,content:delete}')`,
     [credentialId, userId],
   );
-  await grantScopes(credentialId, ["content:read", "content:write"]);   // ADR 0029 grant rows
+  // content:delete (W4): members may delete content — the route's author-gate restricts
+  // each to their OWN authored blocks (operator-ratified 2026-06-29; ADR 0038 §W4).
+  await grantScopes(credentialId, ["content:read", "content:write", "content:delete"]);   // ADR 0029 grant rows
   const { mintAccess } = await import("./auth/tokens.ts");
   const { issueRefresh } = await import("./auth/refresh.ts");
   const access = await mintAccess({ sub: userId, cid: credentialId });
@@ -627,7 +629,7 @@ app.put("/families/:fid/blocks/:id", async (c) => {
   if (member && st.deleted) return c.body(null, 410);
   // If-Match optimistic concurrency: stale base version → 412 re-merge-retry (ADR 0038 §6.2).
   if (ifMatchFails(c.req.header("if-match"), st.deleted ? null : st.version)) return c.body(null, 412);
-  const row = await hubs.upsertBlock(fid, id, sectionId, parsed.data, { allowResurrect: !member });
+  const row = await hubs.upsertBlock(fid, id, sectionId, parsed.data, { allowResurrect: !member, createdBy: a.userId });
   if (!row) {
     // member path + lost the resurrection race → the block was tombstoned → 410; else the
     // parent section vanished between resolution and write → 409 give-up.
@@ -635,6 +637,42 @@ app.put("/families/:fid/blocks/:id", async (c) => {
   }
   if (opId) await recordOp(fid, opId, "block", id, Number(row.version));
   return c.json(row, 200);
+});
+
+// W4 — soft-delete a block (ADR 0038). Authz layers (no existence oracle): block-absent
+// → 404; hub the caller can't see → 404; lacks `content:delete` (carved out of write so a
+// stolen write token can't mass-delete) → 403; member deleting content they didn't author
+// → 403 (loop-authored is undeletable by members; owner is NOT a delete override, ADR 0030
+// §7). op_id idempotency makes a drained/retried delete safe (a re-delete is 204, not 404).
+app.delete("/families/:fid/blocks/:id", async (c) => {
+  const fid = c.req.param("fid"), id = c.req.param("id");
+  { const e = idError(id); if (e) return c.json(e, 422); }
+  const a = await authorizeTenant(c, fid);
+  if ("status" in a) return c.body(null, a.status);
+  const caller = { userId: a.userId, legacy: a.legacy };
+  const opId = c.req.header("idempotency-key");
+  // Idempotent replay: the delete already applied under this op_id → 204 (before the
+  // 404-on-tombstone below, so a drained/retried delete converges instead of 404ing).
+  if (opId && (await findOp(fid, opId))) return c.body(null, 204);
+  const blk = await hubs.blockForDelete(fid, id);
+  if (!blk) return c.body(null, 404);                                  // never existed
+  // Visibility gate FIRST (no oracle): a block in a hub the caller can't see → 404,
+  // regardless of scope. Resolve the parent hub via the (possibly tombstoned) section.
+  const hubId = await hubs.liveHubOfSection(fid, blk.section_id);
+  if (!hubId) return c.body(null, 404);                                // parent gone → unreachable
+  const hub = await hubs.getHub(fid, hubId);
+  if (!hub) return c.body(null, 404);
+  const allow = await hubs.allowListFor(fid, hubId);
+  if (!hubs.hubVisible(hub, caller, () => !!caller.userId && allow.has(caller.userId))) return c.body(null, 404);
+  // content:delete is its OWN scope (not implied by content:write).
+  if (!(await requireScope(a.cred.id, "content", "delete"))) return c.json({ type: "forbidden" }, 403);
+  // Author-gate: a member may delete only what they authored. Loop/CLI authoring (legacy
+  // or non-app credential) is exempt — it's the operator/loop, not a family member.
+  if (isMemberWrite(a) && blk.created_by !== caller.userId) return c.json({ type: "forbidden" }, 403);
+  if (blk.deleted) { if (opId) await recordOp(fid, opId, "block", id, null); return c.body(null, 204); } // already gone = idempotent
+  const ok = await hubs.softDeleteBlock(fid, id);
+  if (opId) await recordOp(fid, opId, "block", id, null);
+  return c.body(null, ok ? 204 : 404);
 });
 
 app.post("/device/authorize", async (c) => {

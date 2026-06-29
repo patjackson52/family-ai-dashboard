@@ -134,10 +134,11 @@ export async function createFamily(userId: string, name: string): Promise<{ fami
 export async function mintCredentialFor(userId: string): Promise<{ credentialId: string }> {
   const credentialId = id("cred");
   await q(
-    `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write}')`,
+    `INSERT INTO credentials(id,user_id,kind,scopes) VALUES ($1,$2,'app','{content:read,content:write,content:delete}')`,
     [credentialId, userId],
   );
   const { grantScopes } = await import("./scope.ts");            // ADR 0029 grant rows
-  await grantScopes(credentialId, ["content:read", "content:write"]);
+  // content:delete (W4): author-gated member delete (operator-ratified 2026-06-29).
+  await grantScopes(credentialId, ["content:read", "content:write", "content:delete"]);
   return { credentialId };
 }
