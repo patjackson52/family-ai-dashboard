@@ -26,7 +26,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."                      # apps/
 ROOT="$(cd .. && pwd)"
 ADB="${ADB:-$HOME/Library/Android/sdk/platform-tools/adb}"
-JAVA17="${JAVA17:-/opt/homebrew/Cellar/openjdk@17/17.0.18/libexec/openjdk.jdk/Contents/Home}"
+JAVA17="${JAVA17:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
 DB=dayfold_dev
 SECRET=devsecret
 DEVICE="${DEVICE:-$($ADB devices | awk 'NR>1 && $2=="device"{print $1; exit}')}"
@@ -55,7 +55,10 @@ echo "api port: $PORT (device reaches it as :8799 via adb reverse)"
 
 # 3. fresh DB + migrations + seed (idempotent)
 dropdb "$DB" 2>/dev/null || true; createdb "$DB"
-for m in api/migrations/000[1-9]_*.sql; do psql -q -d "$DB" -f "$m"; done
+# ALL migrations in order (4-digit zero-padded → lexical sort is correct). The old
+# 000[1-9] glob stopped at 0009 and silently skipped 0010+ (e.g. 0015 op_log / two-way
+# reserve), which 500'd member writes on-device until applied. Apply the full set.
+for m in api/migrations/[0-9][0-9][0-9][0-9]_*.sql; do psql -q -d "$DB" -f "$m"; done
 psql -q -d "$DB" -f apps/scripts/ondevice-seed.sql 2>/dev/null || psql -q -d "$DB" -f scripts/ondevice-seed.sql
 echo "seeded: $(psql -t -d "$DB" -c "select count(*) from hubs" | tr -d ' ') hubs"
 

@@ -206,6 +206,12 @@ class ContentStore(driver: SqlDriver) {
     }
   }
 
+  /** Manual Retry (Slice 4): re-arm a block's failed op(s) + flip it back to 'pending' so
+   *  the next drainOutbox re-sends it. One transaction so the flag and the queue agree. */
+  fun retryBlock(blockId: String) {
+    q.transaction { q.retryFailedForTarget(blockId); q.setBlockLocalState("pending", blockId) }
+  }
+
   /** Diagnostic: count of still-pending ops (egress backlog). */
   fun pendingOpCount(): Int = q.pendingOps().executeAsList().size
   /** Diagnostic: total outbox rows (pending + inflight + acked + failed). */

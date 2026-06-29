@@ -261,4 +261,36 @@ class HubEngineTest {
     assertEquals(false, hit)                               // guarded before any network call
     assertNull(store.state.currentHubAudience)
   }
+
+  // Slice 4 (ADR 0038) — toggleItem runs the optimistic apply + outbox enqueue through
+  // ContentStore. A 500 backend means the kicked sync's inbound drain throws before the
+  // egress runs, so the op stays pending and we can observe the enqueue deterministically.
+  private fun seedChecklist(cs: ContentStore) = cs.applyDelta(
+    changedCards = emptyList(),
+    changedHubs = listOf(Hub("h1", title = "Party", visibility = "family")),
+    changedSections = listOf(HubSection("s1", hubId = "h1", title = "Plan")),
+    changedBlocks = listOf(HubBlock(id = "b1", sectionId = "s1", type = "checklist", ord = 0, version = 3,
+      payload = BlockPayload(items = listOf(ChecklistItem(id = "i1", text = "Pack", done = false))))),
+    tombstones = emptyList(), nextCursor = "c1", nowIso = "2026-06-29T00:00:00Z",
+  )
+
+  @Test fun `toggleItem optimistically flips the block to pending and queues one op`() = runBlocking<Unit> {
+    val store = readyStore()
+    val cs = freshContentStore(); seedChecklist(cs)
+    val e = engine(store, MockEngine { respond("err", HttpStatusCode.InternalServerError) }, contentStore = cs)
+    e.toggleItem("b1", "i1", done = true)
+    assertEquals("pending", cs.blockLocalState("b1"))       // optimistic write flag is on
+    assertEquals(1, cs.pendingOpCount())                    // exactly one coalesced egress op
+  }
+
+  @Test fun `retryBlock re-arms a block parked failed back to pending`() = runBlocking<Unit> {
+    val store = readyStore()
+    val cs = freshContentStore(); seedChecklist(cs)
+    cs.enqueueBlockToggle("b1", "i1", done = true, doneBy = "mom", nowIso = "2026-06-29T00:01:00Z", opId = "OP1")
+    val op = cs.nextPendingOp()!!; cs.markOpInflight(op.opId); cs.failOp(op.opId, "b1")   // simulate cap-reached
+    assertEquals("failed", cs.blockLocalState("b1"))
+    val e = engine(store, MockEngine { respond("err", HttpStatusCode.InternalServerError) }, contentStore = cs)
+    e.retryBlock("b1")
+    assertEquals("pending", cs.blockLocalState("b1"))       // flipped back; op re-queued for the next drain
+  }
 }

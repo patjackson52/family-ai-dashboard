@@ -1,5 +1,13 @@
 package com.sloopworks.dayfold.client
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,32 +25,48 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.sloopworks.dayfold.client.ui.loading.ErrorRetry
 import com.sloopworks.dayfold.client.ui.loading.ListSkeleton
+import com.sloopworks.dayfold.client.ui.loading.rememberReduceMotion
 
 // ── Hubs surface (ADR 0006 render · ADR 0030 visibility) ─────────────────────
 // f(state)→UI. Rich per-type block rendering (checklist boxes, budget bars, maps)
@@ -207,6 +231,12 @@ fun HubDetailScreen(
   onNow: () -> Unit = {},
   onOpenAudience: () -> Unit = {},
   onRetry: () -> Unit = {},
+  // Slice 4 (ADR 0038): a member toggle → (blockId, itemId, newDone); the shell routes
+  // it to HubEngine.toggleItem → ContentStore.enqueueBlockToggle. onSyncNow forces a
+  // drain ("Sync now" pill); onRetryBlock re-queues a block parked 'failed'.
+  onToggleItem: (String, String, Boolean) -> Unit = { _, _, _ -> },
+  onRetryBlock: (String) -> Unit = {},
+  onSyncNow: () -> Unit = {},
 ) {
   val tree = state.currentHubTree
   Scaffold(
@@ -237,12 +267,25 @@ fun HubDetailScreen(
         focusedBlockItemIndex(tree, state.hubFocusBlockId, hasCountdown, tree.hub.visibility == "restricted")
           ?.let { listState.animateScrollToItem(it) }
       }
+      // Slice 4 (ADR 0038, States screen): the optimistic-write status, derived off the
+      // blocks' local_state — one calm queue affordance, never a per-row alarm.
+      val pendingWrites = tree.blocks.count { it.localState == "pending" }
+      val failedWrites = tree.blocks.count { it.localState == "failed" }
       LazyColumn(
         Modifier.fillMaxSize().padding(pad),
         state = listState,
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
       ) {
+        // Offline/queued banner: shown only when a sync is actually failing AND we hold
+        // unsynced writes — the only honest moment to say "saved here, will sync" (D4).
+        if (state.error != null && (pendingWrites > 0 || failedWrites > 0)) {
+          item(key = "sync-banner") { OfflineSavedBanner() }
+        }
+        // Queue pill: a single tappable "N waiting · Sync now" while writes are in flight.
+        if (pendingWrites > 0) {
+          item(key = "queue-pill") { QueuePill(pendingWrites, onSyncNow = onSyncNow) }
+        }
         item {
           // ADR 0036: enriched hub gets a height-capped hero banner (image → icon+
           // accent fallback) above the status row. Part of the first item so the
@@ -313,7 +356,9 @@ fun HubDetailScreen(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
-          items(blocks, key = { "blk-${it.id}" }) { block -> HubBlockCard(block, focused = block.id == state.hubFocusBlockId) }
+          items(blocks, key = { "blk-${it.id}" }) { block ->
+            HubBlockCard(block, focused = block.id == state.hubFocusBlockId, onToggleItem = onToggleItem, onRetryBlock = onRetryBlock)
+          }
         }
       }
       }
@@ -442,7 +487,12 @@ internal fun budgetTotals(p: BlockPayload?): Pair<Double, Double> {
 }
 
 @Composable
-private fun HubBlockCard(block: HubBlock, focused: Boolean = false) {
+private fun HubBlockCard(
+  block: HubBlock,
+  focused: Boolean = false,
+  onToggleItem: (String, String, Boolean) -> Unit = { _, _, _ -> },
+  onRetryBlock: (String) -> Unit = {},
+) {
   Card(
     Modifier.fillMaxWidth()
       .then(if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(22.dp)) else Modifier),
@@ -464,7 +514,7 @@ private fun HubBlockCard(block: HubBlock, focused: Boolean = false) {
         blockFallsBackToBodyMd(block) -> Text(rememberRenderedMarkdown(block.bodyMd ?: ""), style = MaterialTheme.typography.bodyMedium)
         else -> when (block.type) {
           "text", "markdown" -> Text(rememberRenderedMarkdown(block.bodyMd ?: ""), style = MaterialTheme.typography.bodyMedium)
-          "checklist" -> block.payload?.items?.forEach { item -> ChecklistRow(item) }
+          "checklist" -> ChecklistBlock(block, onToggleItem = onToggleItem, onRetryBlock = onRetryBlock)
           "link", "document" -> LinkRow(block)
           "contact" -> ContactRow(block.payload)
           "location" -> LocationBlock(block.payload)
@@ -478,25 +528,196 @@ private fun HubBlockCard(block: HubBlock, focused: Boolean = false) {
   }
 }
 
+// Slice 4 (ADR 0038 §4) — the interactive checklist. The check IS a fold: a freshly
+// tapped row stays live + struck through one shared ~2s burst, then the whole batch
+// folds into a collapsed "N done" section (newest-first, count-only past ~20). The
+// block carries the optimistic-write state (local_state) — a saving hairline while it
+// syncs, a calm Retry if it gives up — plus the one honest sharing claim (D4).
 @Composable
-private fun ChecklistRow(item: ChecklistItem) {
-  Row(verticalAlignment = Alignment.CenterVertically) {
-    // filled coral check when done, outlined warm ring when not (design treatment)
-    val box = if (item.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
+private fun ChecklistBlock(
+  block: HubBlock,
+  onToggleItem: (String, String, Boolean) -> Unit,
+  onRetryBlock: (String) -> Unit,
+) {
+  val items = block.payload?.items ?: emptyList()
+  // Interactive iff items carry stable ids (ADR 0038 CLI stamp-on-push) — only then can a
+  // member toggle merge. A legacy/display-only list (no ids, e.g. a loop card with plain
+  // items) renders as static struck rows: no fold, no sync chip — the "synced when online"
+  // claim is only honest (D4) where a real member-write boundary exists.
+  val interactive = items.any { it.id != null }
+  if (!interactive) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { items.forEach { ChecklistRow(it, onToggle = null) } }
+    return
+  }
+  // The burst set lives in UI state; the DB done-triple is the source of truth. Each
+  // tap re-arms ONE shared debounce (LaunchedEffect re-keys on the set) so a rapid
+  // batch folds together, not staggered. Touch has already ended on a discrete tap.
+  var fold by remember { mutableStateOf(ChecklistFold()) }
+  LaunchedEffect(fold.checking) {
+    if (fold.checking.isNotEmpty()) {
+      kotlinx.coroutines.delay(2_000)
+      fold = fold.burstFolded()
+    }
+  }
+  val active = ChecklistFoldView.activeItems(items, fold.checking)
+  val done = ChecklistFoldView.doneItems(items, fold.checking)
+
+  fun toggle(item: ChecklistItem, newDone: Boolean) {
+    val id = item.id ?: return                        // no stable id → can't merge; non-interactive
+    fold = fold.toggled(id, newDone)
+    onToggleItem(block.id, id, newDone)
+  }
+
+  Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    active.forEach { item -> ChecklistRow(item, onToggle = item.id?.let { { nd -> toggle(item, nd) } }) }
+    if (done.isNotEmpty()) {
+      DoneSection(done, collapsedOnly = ChecklistFoldView.doneCollapsedOnly(done.size), onToggle = ::toggle)
+    }
+    // optimistic-write state for the whole-block PUT (the real boundary): a saving
+    // hairline while pending, a calm inline Retry (never a dialog) once it's failed.
+    when (block.localState) {
+      "pending" -> LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp).padding(top = 4.dp))
+      "failed" -> FailedRetry(onRetry = { onRetryBlock(block.id) })
+    }
+    // Honest claim (ADR 0022 D4): a member toggle really is shared + synced to the family.
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      Text("Shared with your family · synced when online",
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+  }
+}
+
+@Composable
+private fun ChecklistRow(item: ChecklistItem, onToggle: ((Boolean) -> Unit)? = null) {
+  val reduceMotion = rememberReduceMotion()
+  val haptics = LocalHapticFeedback.current
+  val done = item.done
+  // box fills coral with a quick scale-overshoot; the ✓ draws in (M3 emphasized). The
+  // strike wipes left→right via drawWithContent (animate between states, never snap).
+  val checkScale by animateFloatAsState(
+    targetValue = if (done) 1f else 0f,
+    animationSpec = if (reduceMotion) tween(0) else spring(dampingRatio = 0.45f, stiffness = 900f),
+    label = "check-scale",
+  )
+  val strike by animateFloatAsState(
+    targetValue = if (done) 1f else 0f,
+    animationSpec = if (reduceMotion) tween(0) else tween(180),
+    label = "strike",
+  )
+  val onSurfaceVar = MaterialTheme.colorScheme.onSurfaceVariant
+  // Whole-row 48dp hit target, Role.Checkbox + state. The actor (who toggled) rides in
+  // the state description so a screen reader hears "checked by Mom".
+  val rowMod = if (onToggle != null) {
+    Modifier.fillMaxWidth().height(48.dp).toggleable(    // ≥48dp hit target only where it's tappable
+      value = done, role = Role.Checkbox,
+      onValueChange = { nd -> haptics.performHapticFeedback(HapticFeedbackType.LongPress); onToggle(nd) },
+    ).semantics {
+      stateDescription = buildString {
+        append(if (done) "checked" else "not checked")
+        if (done && item.doneBy != null) append(", by ${item.doneBy}")
+      }
+    }
+  } else Modifier.fillMaxWidth()
+
+  Row(rowMod, verticalAlignment = Alignment.CenterVertically) {
+    val box = if (done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
     Box(
-      Modifier.size(22.dp).clip(RoundedCornerShape(7.dp)).background(box)
-        .then(if (item.done) Modifier else Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(7.dp))),
+      Modifier.size(24.dp).clip(RoundedCornerShape(8.dp)).background(box)
+        .then(if (done) Modifier else Modifier.border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))),
       contentAlignment = Alignment.Center,
-    ) { if (item.done) Text("✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary) }
+    ) {
+      if (checkScale > 0.01f) {
+        Text("✓", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary,
+          modifier = Modifier.graphicsLayer { scaleX = checkScale; scaleY = checkScale })
+      }
+    }
     Column(Modifier.padding(start = 12.dp).weight(1f)) {
       Text(
         item.text ?: "",
         style = MaterialTheme.typography.bodyMedium,
-        color = if (item.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-        textDecoration = if (item.done) TextDecoration.LineThrough else null,
+        color = if (done) onSurfaceVar else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.drawWithContent {
+          drawContent()
+          if (strike > 0f) {
+            val y = size.height / 2f
+            drawLine(onSurfaceVar, Offset(0f, y), Offset(size.width * strike, y), strokeWidth = 2.dp.toPx())
+          }
+        },
       )
-      val sub = listOfNotNull(item.due?.let { "Due $it" }, item.assignee).joinToString(" · ")
-      if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      // subline: the conflict/remote byline ("✓ Mom") when done, else due · assignee.
+      val sub = if (done && item.doneBy != null) "✓ ${item.doneBy}"
+        else listOfNotNull(item.due?.let { "Due $it" }, item.assignee).joinToString(" · ")
+      if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.labelSmall, color = onSurfaceVar)
+    }
+  }
+}
+
+// The collapsed "N done" foldaway (Role.Button, expand/collapse). Past ~20 done it's a
+// calm count-only line (no expand). Expanded rows stay tappable so a fold can be undone.
+@Composable
+private fun DoneSection(done: List<ChecklistItem>, collapsedOnly: Boolean, onToggle: (ChecklistItem, Boolean) -> Unit) {
+  var open by remember { mutableStateOf(false) }
+  Column {
+    Surface(
+      color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(12.dp),
+      modifier = Modifier.fillMaxWidth().then(
+        if (collapsedOnly) Modifier
+        else Modifier.clickable(role = Role.Button, onClickLabel = if (open) "Collapse done items" else "Expand done items") { open = !open }
+      ),
+    ) {
+      Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("${done.size} done", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+    }
+    AnimatedVisibility(visible = open && !collapsedOnly, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+      Column(Modifier.padding(top = 4.dp)) {
+        done.forEach { item -> ChecklistRow(item, onToggle = item.id?.let { { nd -> onToggle(item, nd) } }) }
+      }
+    }
+  }
+}
+
+// Calm failure (ADR 0022 D4 / States screen): neutral-toned, data preserved, a single
+// focusable Retry — never red, never a modal.
+@Composable
+private fun FailedRetry(onRetry: () -> Unit) {
+  Row(Modifier.fillMaxWidth().alpha(0.85f), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.weight(1f)) {
+      Text("Couldn't save — nothing lost", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+      Text("We'll keep it here and retry.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    TextButton(onClick = onRetry) { Text("Retry") }
+  }
+}
+
+// One quiet offline/queued banner (not a per-row alarm). Honest whether the network is
+// down or the server is unreachable: the local copy is saved and will sync.
+@Composable
+private fun OfflineSavedBanner() {
+  Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+      Column {
+        Text("Saved here", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        Text("Your changes will sync when you're back online.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+    }
+  }
+}
+
+// The queue pill (AssistChip-shaped): "N waiting · Sync now". Tapping forces a sync; it
+// never blocks. Shown only while writes are pending.
+@Composable
+private fun QueuePill(pending: Int, onSyncNow: () -> Unit) {
+  Surface(
+    color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(999.dp),
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+  ) {
+    Row(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      val label = if (pending == 1) "1 change saving" else "$pending changes saving"
+      Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+      Text("Sync now", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.clickable(role = Role.Button, onClickLabel = "Sync now") { onSyncNow() })
     }
   }
 }

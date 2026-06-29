@@ -86,6 +86,8 @@ fun main() = application {
       onOpenHub = { id, block -> scope.launch { hubEngine.openHub(id, block) } },
       onCloseHub = { scope.launch { hubEngine.closeHub() } },  // PR2: cancel tree subscription
       onLoadAudience = { id -> scope.launch { hubEngine.loadAudience(id) } },
+      onToggleItem = { blockId, itemId, done -> scope.launch { hubEngine.toggleItem(blockId, itemId, done) } },  // Slice 4
+      onRetryBlock = { blockId -> scope.launch { hubEngine.retryBlock(blockId) } },
     )
   }
 }

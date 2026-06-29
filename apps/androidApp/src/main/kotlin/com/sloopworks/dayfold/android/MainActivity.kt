@@ -184,6 +184,8 @@ class MainActivity : ComponentActivity() {
           onOpenHub = { id, block -> lifecycleScope.launch { hubEngine.openHub(id, block) } },
           onCloseHub = { lifecycleScope.launch { hubEngine.closeHub() } },  // PR2: cancel tree subscription
           onLoadAudience = { id -> lifecycleScope.launch { hubEngine.loadAudience(id) } },
+          onToggleItem = { blockId, itemId, done -> lifecycleScope.launch { hubEngine.toggleItem(blockId, itemId, done) } },  // Slice 4
+          onRetryBlock = { blockId -> lifecycleScope.launch { hubEngine.retryBlock(blockId) } },
         )
       }
     }

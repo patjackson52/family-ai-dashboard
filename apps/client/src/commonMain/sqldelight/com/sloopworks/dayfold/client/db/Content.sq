@@ -259,6 +259,12 @@ failedOps:
 SELECT op_id, target_kind, target_id, type, payload, base_version, depends_on, state, attempts, result_version, created_at
 FROM outbox WHERE state='failed';
 
+-- Slice 4 — manual Retry of a block parked 'failed': re-arm its failed op(s) (reset the
+-- attempt budget) so the next drain re-sends them. The block's local_state is flipped
+-- back to 'pending' by the caller in the same transaction.
+retryFailedForTarget:
+UPDATE outbox SET state='pending', attempts=0 WHERE target_id=? AND state='failed';
+
 outboxSize:
 SELECT count(*) FROM outbox;
 

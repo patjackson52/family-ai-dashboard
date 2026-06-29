@@ -7,9 +7,10 @@ an agent verify changes with *text + on-demand image reads* instead of
 device-screencap-every-iteration → faster, fewer tokens.
 
 ## Toolchain (fixed — don't re-discover)
-- **JDK 17** for all Gradle builds: `JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.18/libexec/openjdk.jdk/Contents/Home`
-  (Gradle's own daemon may be JDK 26; Kotlin needs 17). Each Kotlin module has a
-  wrapper (`./gradlew`).
+- **JDK 17** for all Gradle builds: `JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home`
+  (the version-independent brew symlink — use this, NOT the `Cellar/openjdk@17/17.0.x`
+  path, which breaks on every patch bump, e.g. 17.0.18→17.0.19). Gradle's own daemon may
+  be JDK 26; Kotlin needs 17. Each Kotlin module has a wrapper (`./gradlew`).
 - **Kotlin 2.3.20** · Compose-MP 1.9.3 (desktop) · **AGP 9.2.1** · **Gradle 9.4.1**
   (the single `apps/` wrapper; PR #26 upgraded from the old 8.7.2/8.11.1) · compileSdk
   37 (Android 16) · Node 24 + local Postgres (`psql`) running.

@@ -22,12 +22,30 @@ class HubEngine(
   private val contentStore: ContentStore,
   private val syncEngine: SyncEngine,
   private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+  // Seams (Slice 4) — injectable so the toggle path is testable without the wall clock/RNG.
+  private val nowProvider: () -> String = { kotlin.time.Clock.System.now().toString() },
+  private val idProvider: () -> String = { Ulid.next() },
 ) {
   private val mutex = Mutex()
   private var treeJob: Job? = null
 
   private fun fid(): String? = store.state.activeFamilyId
   private fun session(): Session? = store.state.session
+
+  // Slice 4 (ADR 0038 §5.4) — a member checklist toggle. The optimistic apply + outbox
+  // enqueue is one atomic ContentStore call; we then kick a sync so the egress drains
+  // promptly (the 45s poll would otherwise carry it). doneBy = the acting member (the
+  // LWW tiebreak + "✓ Mom" byline); the stamp is the merge clock for un-check too.
+  suspend fun toggleItem(blockId: String, itemId: String, done: Boolean) {
+    contentStore.enqueueBlockToggle(blockId, itemId, done, session()?.userId, nowProvider(), idProvider())
+    scope.launch { syncEngine.syncNow() }
+  }
+
+  // Slice 4 — manual Retry of a block parked 'failed': re-arm its op(s) + kick a sync.
+  suspend fun retryBlock(blockId: String) {
+    contentStore.retryBlock(blockId)
+    scope.launch { syncEngine.syncNow() }
+  }
 
   // PR1: the hub LIST is now DB-fed via the SyncEngine hub bridge — this method is a
   // no-op. The bridge (SyncEngine.hubBridgeJob) is the sole writer of state.hubs via

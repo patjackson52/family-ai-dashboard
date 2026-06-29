@@ -37,10 +37,24 @@ hubs only; W5 hide = local-only first; INB-25/26 closed). Ratification merged vi
   dispatch in `applyDelta` + echo-suppress, `SyncClient.putBlock` (If-Match +
   Idempotency-Key), `SyncEngine.drainOutbox` under the sync mutex. **481 client tests
   green** incl. 2 headless egress integration tests (happy path + 412 re-merge converge).
-- **Next**: Slice 4 (toggle UI → `designs/two-way/States`+`Todo`, needs the
-  agent-dev-loop on-device verification — `ChecklistRow` calls `enqueueBlockToggle`),
-  Slice 5 (delete+hide), Slice 6 (freshness). Deferred + gated last: W2 authoring,
-  W1 media (R2), W3 add-context (EXPERIMENTAL/flagged).
+- **Slice 4 (toggle UI) — ✅ COMPLETE (branch `two-way-slice4-toggle-ui`)**: the
+  tappable `ChecklistRow` (whole-row 48dp, `Role.Checkbox` + state desc, coral check
+  scale-overshoot + left→right strike wipe, one haptic tick, reduced-motion aware) →
+  `HubEngine.toggleItem` → `ContentStore.enqueueBlockToggle` → `SyncEngine.drainOutbox`.
+  Pure `ChecklistFold` burst machine (one shared ~2s debounce → batch fold into "N done",
+  newest-first, count-only >20) + client `Ulid` minter, both TDD. Five-rung optimistic
+  vocabulary off `local_state` (saving hairline / calm inline Retry, never a modal) +
+  offline banner + "N saving · Sync now" queue pill; honesty chip "Shared with your
+  family · synced when online". Interactivity gated on item ids (display-only lists stay
+  static — the synced claim is only honest where a member-write boundary exists, D4).
+  **503 client tests green** (+22); **on-device verified on the Pixel**: real
+  tap → optimistic flip + strike → burst-fold "2 done" → pending pill → whole-block PUT
+  → server `blk_chk` v1→v2 (`done:true`) → /sync echo clears pending. Threaded through all
+  three shells (android/desktop/ios — compile-clean). Dev-infra fixes folded in:
+  `ondevice-demo.sh` migration glob (`000[1-9]`→all, was skipping 0015 op_log → 500s),
+  JAVA17 path (stable brew symlink, 17.0.18→17.0.19 drift), seed + fake checklist ids.
+- **Next**: Slice 5 (delete+hide), Slice 6 (freshness). Deferred + gated last:
+  W2 authoring, W1 media (R2), W3 add-context (EXPERIMENTAL/flagged).
 
 **Status update (2026-06-26): first real on-device sign-in is LIVE on prod.** Real
 Google sign-in + foreground sync now work end-to-end on the Pixel against

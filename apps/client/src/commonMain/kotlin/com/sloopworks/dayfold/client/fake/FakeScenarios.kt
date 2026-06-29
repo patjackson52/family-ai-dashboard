@@ -74,12 +74,13 @@ object FakeScenarios {
 
         ![Backyard layout sketch](https://files.example/backyard-layout.png)
       """.trimIndent(), provenance = Provenance("claude"), ord = 0),
-    HubBlock(id = "b_party_checklist", sectionId = "s_party_plan", type = "checklist",
+    // Items carry stable ids (ADR 0038 stamp) → this checklist is member-interactive (Slice 4).
+    HubBlock(id = "b_party_checklist", sectionId = "s_party_plan", type = "checklist", version = 1,
       payload = BlockPayload(items = listOf(
-        ChecklistItem(text = "Order cake", done = true),
-        ChecklistItem(text = "Send invites", done = true),
-        ChecklistItem(text = "Buy balloons", done = false),
-        ChecklistItem(text = "Pick up rentals", done = false, due = "2026-06-21T13:00:00Z", assignee = "Sam"),
+        ChecklistItem(id = "01HZPARTYCAKE000000000001", text = "Order cake", done = true, doneBy = "Mom", doneAt = "2026-06-20T09:00:00Z"),
+        ChecklistItem(id = "01HZPARTYINVITES000000002", text = "Send invites", done = true, doneBy = "Sam", doneAt = "2026-06-20T10:00:00Z"),
+        ChecklistItem(id = "01HZPARTYBALLOONS00000003", text = "Buy balloons", done = false),
+        ChecklistItem(id = "01HZPARTYRENTALS000000004", text = "Pick up rentals", done = false, due = "2026-06-21T13:00:00Z", assignee = "Sam"),
       )), provenance = Provenance("claude"), ord = 1),
     HubBlock(id = "b_party_milestone", sectionId = "s_party_plan", type = "milestone",
       bodyMd = "Party starts", payload = BlockPayload(date = "2026-06-21T15:00:00Z"), ord = 2),

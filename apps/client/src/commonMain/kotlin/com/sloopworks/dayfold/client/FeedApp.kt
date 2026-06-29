@@ -90,6 +90,11 @@ fun FeedApp(
   onOpenHub: (String, String?) -> Unit = { _, _ -> },  // tap/deep-link a hub → load tree (+ focus block)
   onCloseHub: () -> Unit = {},          // detail → list: cancel the DB tree subscription (HubEngine.closeHub)
   onLoadAudience: (String) -> Unit = {},// "who can see" sheet → load the audience (HubEngine.loadAudience)
+  // Slice 4 (ADR 0038): member checklist writes. onToggleItem(blockId,itemId,done) →
+  // HubEngine.toggleItem → ContentStore.enqueueBlockToggle; onRetryBlock re-queues a
+  // block parked 'failed'. Default no-ops keep screens snapshot-testable in isolation.
+  onToggleItem: (String, String, Boolean) -> Unit = { _, _, _ -> },
+  onRetryBlock: (String) -> Unit = {},
 ) {
   // ADR 0036: one-time Coil image-loader setup (Ktor network fetcher + crossfade).
   // Idempotent; runs before the first AsyncImage composes. URLs are still gated by
@@ -133,7 +138,7 @@ fun FeedApp(
         onNavHubs = { store.dispatch(OpenHubs); onLoadHubs() },
         onRefresh = onRefresh,
       )
-      Route.Hubs -> HubsHost(store, state, onLoadHubs = onLoadHubs, onOpenHub = onOpenHub, onCloseHub = onCloseHub, onLoadAudience = onLoadAudience)
+      Route.Hubs -> HubsHost(store, state, onLoadHubs = onLoadHubs, onOpenHub = onOpenHub, onCloseHub = onCloseHub, onLoadAudience = onLoadAudience, onToggleItem = onToggleItem, onRetryBlock = onRetryBlock, onSyncNow = onRefresh)
       else -> SafeArea { when (state.route) {
       Route.Loading -> SplashScreen()
       // A deep-link tapped before sign-in shows the branded resume screen instead
@@ -287,7 +292,7 @@ private fun ContentHost(store: Store<AppState>, state: AppState, handle: (CardAc
 // Hubs surface host (ADR 0006): list ↔ detail substate driven by currentHubId.
 // A LaunchedEffect fetches the list on entry; the bottom nav flips back to Feed.
 @Composable
-private fun HubsHost(store: Store<AppState>, state: AppState, onLoadHubs: () -> Unit, onOpenHub: (String, String?) -> Unit, onCloseHub: () -> Unit = {}, onLoadAudience: (String) -> Unit) {
+private fun HubsHost(store: Store<AppState>, state: AppState, onLoadHubs: () -> Unit, onOpenHub: (String, String?) -> Unit, onCloseHub: () -> Unit = {}, onLoadAudience: (String) -> Unit, onToggleItem: (String, String, Boolean) -> Unit = { _, _, _ -> }, onRetryBlock: (String) -> Unit = {}, onSyncNow: () -> Unit = {}) {
   androidx.compose.runtime.LaunchedEffect(Unit) { if (state.hubs.isEmpty()) onLoadHubs() }
   androidx.compose.foundation.layout.Box {
     if (state.currentHubId != null) {
@@ -295,6 +300,7 @@ private fun HubsHost(store: Store<AppState>, state: AppState, onLoadHubs: () -> 
         state, onBack = { onCloseHub(); store.dispatch(CloseHub) }, onNow = { store.dispatch(OpenFeed) },
         onOpenAudience = { state.currentHubId?.let { store.dispatch(OpenAudienceSheet); onLoadAudience(it) } },
         onRetry = { state.currentHubId?.let { id -> onOpenHub(id, null) } },
+        onToggleItem = onToggleItem, onRetryBlock = onRetryBlock, onSyncNow = onSyncNow,
       )
     } else {
       HubListScreen(state, onOpenHub = { onOpenHub(it, null) }, onNow = { store.dispatch(OpenFeed) }, onFilter = { store.dispatch(SetHubFilter(it)) }, onRetry = onLoadHubs)
