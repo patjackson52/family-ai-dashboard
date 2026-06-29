@@ -1,5 +1,7 @@
 package com.sloopworks.dayfold.client
 
+import kotlin.time.Instant
+
 // ADR 0038 §5 — the client-side merge that makes two-way checklists converge without
 // the server ever reading the payload. PURE + deterministic: same inputs → same output,
 // so two devices that exchange the same writes reach the same state regardless of order.
@@ -51,13 +53,20 @@ object ChecklistMerge {
   //   - no local stamp        → never newer (remote wins)
   //   - local stamp, no remote → local is newer
   //   - both                  → later doneAt wins; equal doneAt breaks on doneBy
-  // doneAt is an ISO-8601 UTC instant, so lexicographic string order == chronological.
+  // Compare PARSED instants, not strings: kotlinx `Instant.toString()` trims trailing-zero
+  // fractional groups, so lexicographic order is NOT chronological across mixed precision
+  // (".123Z" sorts AFTER ".123000001Z" because "Z" > "0", yet it is 1 ns EARLIER). Cross-device
+  // toggles — Android ms-clock vs desktop/iOS ns-clock — hit exactly this. Lexicographic is the
+  // fallback only when a stamp is non-ISO (shouldn't happen: doneAt is a client now() stamp).
   private fun localDoneIsNewer(local: ChecklistItem, remote: ChecklistItem): Boolean {
     val la = local.doneAt ?: return false
     val ra = remote.doneAt ?: return true
+    val li = runCatching { Instant.parse(la) }.getOrNull()
+    val ri = runCatching { Instant.parse(ra) }.getOrNull()
+    val cmp = if (li != null && ri != null) li.compareTo(ri) else la.compareTo(ra)
     return when {
-      la > ra -> true
-      la < ra -> false
+      cmp > 0 -> true
+      cmp < 0 -> false
       else -> (local.doneBy ?: "") > (remote.doneBy ?: "") // deterministic tiebreak on actor
     }
   }

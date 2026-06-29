@@ -28,6 +28,20 @@ class ChecklistMergeTest {
     assertEquals("dad", m[0].doneBy)
   }
 
+  @Test fun `LWW is chronological across variable fractional precision (cross-device clocks)`() {
+    // kotlinx Instant.toString() trims trailing-zero fraction groups, so a millisecond-precision
+    // clock stamps ".123Z" while a nanosecond clock stamps ".123000001Z" — 1ns LATER, yet it sorts
+    // EARLIER lexicographically ("0" < "Z" after ".123"). Cross-device toggles are EXACTLY the LWW
+    // case, and Android (ms) vs desktop/iOS (ns) clocks differ in precision. The later tap must win.
+    val earlier = "2026-06-29T12:00:00.123Z"           // .123000000 — e.g. a millisecond clock
+    val later   = "2026-06-29T12:00:00.123000001Z"      // .123000001 — 1ns later, e.g. a nanosecond clock
+    val remote = listOf(item("a", "Pack", done = false, doneBy = "dad", doneAt = earlier))
+    val local  = listOf(item("a", "Pack", done = true,  doneBy = "mom", doneAt = later))
+    val m = ChecklistMerge.mergeItems(local, remote)
+    assertEquals(true, m[0].done)          // local's chronologically-later toggle wins
+    assertEquals("mom", m[0].doneBy)
+  }
+
   @Test fun `loop-authoritative fields ALWAYS take remote even when local done wins`() {
     val remote = listOf(item("a", "Pack jackets (edited)", done = false, ord = 5))
     val local = listOf(item("a", "Pack", done = true, doneBy = "mom", doneAt = "2026-06-29T10:00:00Z", ord = 0))
