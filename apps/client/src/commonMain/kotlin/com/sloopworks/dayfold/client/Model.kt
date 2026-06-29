@@ -179,6 +179,18 @@ data class HubSection(
   val ord: Long = 0,
 )
 
+// ADR 0038/0039 — one egress-outbox row as the sender loop reads it. Not serialized
+// (a local DB projection, never on the wire).
+data class OutboxOp(
+  val opId: String,
+  val targetKind: String,
+  val targetId: String,
+  val type: String,
+  val payload: String,
+  val baseVersion: Long?,
+  val attempts: Long,
+)
+
 @Serializable
 data class HubBlock(
   val id: String,
@@ -188,6 +200,10 @@ data class HubBlock(
   val payload: BlockPayload? = null,                         // typed fields for the structured block kinds
   val provenance: Provenance? = null,
   val ord: Long = 0,
+  val version: Long = 1,                                     // ADR 0038 — server row version (If-Match base)
+  // ADR 0038 — client-only optimistic-write state ('pending'/'failed'/null=synced). Not on the
+  // wire; @Transient so it never (de)serializes — it's projected from the local hub_block row.
+  @kotlinx.serialization.Transient val localState: String? = null,
 )
 
 // Flat, lenient block payload — the server stores each block type's fields directly
