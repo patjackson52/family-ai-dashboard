@@ -6,7 +6,7 @@ import org.reduxkotlin.compose
 import org.reduxkotlin.middleware
 import org.reduxkotlin.devtools.DevToolsConfig
 import org.reduxkotlin.devtools.devTools
-import org.reduxkotlin.threadsafe.createThreadSafeStore
+import org.reduxkotlin.concurrent.createConcurrentStore
 
 // The route gate (pure): derived from (session, families). Family-null is a Feed
 // substate, not a route. No session → SignIn; session + an active membership →
@@ -181,8 +181,8 @@ private val actionLog = middleware<AppState> { store, next, action ->
 // to DevToolsHub → in-app drawer) WITH the text action-log middleware. Release
 // passes debug=false (neither).
 fun createAppStore(initial: AppState = AppState(), debug: Boolean = true): Store<AppState> =
-  if (debug) createThreadSafeStore(
+  if (debug) createConcurrentStore(
     ::rootReducer, initial,
-    compose(devTools(DevToolsConfig(instanceId = "family-ai", name = "Family AI")), applyMiddleware(actionLog)),
+    enhancer = compose(devTools(DevToolsConfig(instanceId = "family-ai", name = "Family AI")), applyMiddleware(actionLog)),
   )
-  else createThreadSafeStore(::rootReducer, initial)
+  else createConcurrentStore(::rootReducer, initial)
