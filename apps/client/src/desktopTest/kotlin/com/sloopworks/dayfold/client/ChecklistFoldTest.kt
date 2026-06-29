@@ -69,6 +69,19 @@ class ChecklistFoldTest {
     assertEquals(listOf("Second", "Third", "First"), order)
   }
 
+  @Test fun `done items sort newest-first across variable fractional precision`() {
+    // Same bug class as ChecklistMerge (#250): lexicographic order != chronological once
+    // kotlinx Instant.toString() trims trailing-zero fraction groups. ".123Z" is EARLIER than
+    // ".123000001Z" yet sorts LATER lexically ("Z" > "0"). Cross-device done stamps (Android ms
+    // vs desktop/iOS ns) hit this; newest-first must be chronological, not string order.
+    val items = listOf(
+      item("a", "Earlier", done = true, doneAt = "2026-06-29T10:00:00.123Z"),
+      item("b", "Later", done = true, doneAt = "2026-06-29T10:00:00.123000001Z"),   // 1 ns later
+    )
+    val order = ChecklistFoldView.doneItems(items, emptySet()).map { it.text }
+    assertEquals(listOf("Later", "Earlier"), order)   // chronologically-newest first
+  }
+
   @Test fun `the done section collapses to a count-only line past the threshold`() {
     assertFalse(ChecklistFoldView.doneCollapsedOnly(20))
     assertTrue(ChecklistFoldView.doneCollapsedOnly(21))

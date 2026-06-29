@@ -1,5 +1,7 @@
 package com.sloopworks.dayfold.client
 
+import kotlin.time.Instant
+
 // Slice 4 (ADR 0038 §4) — the PURE burst-fold presentation model for an interactive
 // checklist. The done-triple in the DB is the source of truth; THIS layer decides only
 // *timing*: a freshly-toggled row stays in the live list (struck) through one shared
@@ -31,9 +33,15 @@ object ChecklistFoldView {
   fun activeItems(items: List<ChecklistItem>, checking: Set<String>): List<ChecklistItem> =
     items.filter { !it.done || it.id in checking }
 
-  /** Rows folded into "N done": done and settled (out of the burst), newest-completion first. */
+  /**
+   * Rows folded into "N done": done and settled (out of the burst), newest-completion first.
+   * Sort by the PARSED instant, not the raw string — kotlinx `Instant.toString()` trims
+   * trailing-zero fractions, so lexicographic order isn't chronological across mixed precision
+   * (same bug fixed in ChecklistMerge). null/unparseable `doneAt` sorts last (DISTANT_PAST).
+   */
   fun doneItems(items: List<ChecklistItem>, checking: Set<String>): List<ChecklistItem> =
-    items.filter { it.done && it.id !in checking }.sortedByDescending { it.doneAt ?: "" }
+    items.filter { it.done && it.id !in checking }
+      .sortedByDescending { it.doneAt?.let { s -> runCatching { Instant.parse(s) }.getOrNull() } ?: Instant.DISTANT_PAST }
 
   /** Whether the done section is a count-only line (past the calm threshold). */
   fun doneCollapsedOnly(doneCount: Int): Boolean = doneCount > DONE_COLLAPSE_THRESHOLD
