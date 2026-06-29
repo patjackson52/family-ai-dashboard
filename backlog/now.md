@@ -13,6 +13,19 @@ NO-GO** → **building to learn**; the business unknowns (OQ-wtp / niche / gemin
 are **untouched by design**. The "brains" (G1 authoring loop) is a deliberate
 later milestone; interim authoring = operator + Claude Code via the CLI.
 
+**Status update (2026-06-29): two-way (member-writes) build STARTED.** Operator
+ratified the two-way bundle in-session — ADRs **0038/0039/0040/0041/0042 → Accepted**
+(0041 = the bounded-member-AI-command **constitution amendment**, applied; W3 ships
+EXPERIMENTAL/flagged; member scope = global `content:write`; R2 confirmed; W2 = visible
+hubs only; W5 hide = local-only first; INB-25/26 closed). Ratification merged via
+**PR #238**. **Slice 1 (schema + reserved shape) — PR #247, awaiting review**: checklist
+item `id`/`doneBy`/`doneAt`/`ord` + codegen + Kotlin CI drift guard; CLI ULID
+stamp-on-push (12 new tests); migration 0015 reserves `op_log` + `created_by`/
+`author_kind`/`writer_user_id` on blocks+cards + `block_type`/`card_kind` ENUM→text +
+`content:delete` scope. 97 CLI + 306 API tests green. **Next: Slice 2** (server
+must-fixes: If-Match→412, visibility-on-write uniform-404, 410-on-tombstone, op_log
+idempotency) off `main` once #247 lands.
+
 **Status update (2026-06-26): first real on-device sign-in is LIVE on prod.** Real
 Google sign-in + foreground sync now work end-to-end on the Pixel against
 `family-ai-dashboard.vercel.app`, after fixing a two-part prod-config gap (DB schema
