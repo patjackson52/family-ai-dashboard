@@ -9,6 +9,59 @@ Each item: question, context link, **proposed default**, urgency.
 
 ---
 
+- **INB-29 · PARTIALLY ANSWERED 2026-06-30 → Gate B RATIFIED (ADR 0044 Accepted); Gate A =
+  design prompt delivered (sign-off still pending); carryover pulled forward.** Operator
+  in-session: (1) **Gate B** — "Accept ADR 0044 as written" → ADR 0044 flipped Proposed →
+  Accepted (background-location posture ratified). (2) **Gate A** — operator asked for a
+  Claude Design prompt framing the feature as **opt-in**; delivered as
+  `designs/DESIGN-BRIEF-triggers-v2-phase-b.md` (self-contained; folds in the INB-13 §6b
+  fix-list + the opt-in posture). Mockups + **operator sign-off still required** before any
+  Phase-B implementation surface (geofence / local-notif / permission) builds — Gate A stays
+  open until then. (3) **Carryover** — "build it now": the ungated render-driven record-shown
+  EFFECT is being built on the Phase-B branch independently of the gates. **Phase-B
+  implementation (geofence/notification/permission) remains BLOCKED on Gate A sign-off.**
+  Original (the gate-stop write-up) below.
+
+- **INB-29 · 2026-06-30 · med · open — Now derived surfacing PHASE B is gated; the
+  build loop STOPPED at the gate (no implementation code written).** Phase B = background
+  geofence (on-device, live position never leaves) + **LOCAL** notifications (Android
+  `NotificationManager` / iOS `UNUserNotificationCenter`; **no FCM/APNs**, no server change)
+  firing the SAME Phase-A engine's top-K under a daily cap + quiet-hours. ADR 0043 §2b made the
+  engine shared, so most Phase-B code is platform glue — but Phase B is **operator-gated on TWO
+  things, and NEITHER is met**, so per the build discipline I stopped and am asking instead of
+  deciding in the loop:
+  1. **Gate A — ADR 0008 design-first (NOT met).** The Phase-B surface (the "Always"
+     background-location primer, the LOCAL notification + lock-screen treatment, the offline /
+     geo=on states) lives in the `triggers/` brief. Only a **first-pass** exists (`designs/Family
+     AI dashboard design brief/designs/triggers/`), and **INB-13 is still open**: the 3-agent
+     review flagged a **P0 HONESTY bug** ("saved place coords never leave the device" is FALSE
+     per ADR 0014 — only *live position* stays local) + a v2 fix-list (`designs/DESIGN-BRIEF-
+     triggers.md §6b`). §6b was never handed to Claude Design; there is **no operator sign-off**
+     for the Phase-B surface (contrast INB-28, which signed off `designs/now-derived/` for Phase
+     A *and explicitly* excluded background location / notifications / new permission as Phase B).
+     **Proposed default:** hand §6b (INB-13) to Claude Design → produce the v2 Phase-B mockups →
+     operator signs off. (Visual taste = operator; I can drive the design pass on your word.)
+  2. **Gate B — background-location posture (NOT ratified).** Requesting the **"Always"**
+     permission + the customer-disclosure review is a privacy-posture change (HARD GUARDRAIL
+     #3 restricted-scope/location + #4 customer-relationship). ADR 0014 §4/§6 reserved "Always"
+     as an opt-in upgrade in "a later milestone"; INB-28 deferred it by name. Drafted as **ADR
+     0044 (Proposed)** — `adr/0044-phase-b-background-location-and-local-notification-posture.md`
+     — extends ADR 0043 Phase B + concretizes ADR 0014: "Always" opt-in/reversible/never-up-front,
+     geofence nearest-N (iOS 20-region cap, ADR 0028), LOCAL notifications only (no push vendor →
+     **no spend, no FCM/APNs**), quiet-hours + daily-cap as **device-local never-synced** config
+     (ADR 0024), `rank()` stays pure, server untouched (dumb-server invariant, ADR 0039 §7).
+     **Proposed default:** accept ADR 0044 as written (flip Proposed → Accepted); confirm ADR
+     0043's Phase-B phasing still holds (local notifications, no FCM/APNs).
+  - **Separable / ungated now:** the Phase-A carryover — wiring the render-driven **record-shown
+    EFFECT** (action→effect→DB→`surfacingFlow` bridge, debounced) so anti-nag decay's `last_shown`
+    clock starts — is foreground-only, no new permission/surface, over the already-signed-off
+    `designs/now-derived/` feed. **It can proceed independently of both gates if you want it
+    pulled forward** (an explicit user *dismiss control*, if it needs a new affordance, would
+    still want a mockup). Say the word and I'll build just that slice while the gates close.
+  - Recorded as **operator-gated, decided-by-you** (gate A = design taste + ADR 0008 sign-off;
+    gate B = HARD GUARDRAIL #3/#4 privacy posture). Nothing builds until you ratify. Urgency med
+    — the engine is already built, so Phase B is mostly glue once the gates close.
+
 - **INB-28 · ANSWERED 2026-06-30 → ADR 0043 ACCEPTED + now-derived designs SIGNED OFF.**
   Operator ratified in-session (both gates, before the Phase A build loop): (1) **ADR 0043**
   (Now derived+authored two-lane model + on-device Priority & Ordering Engine) flipped

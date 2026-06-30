@@ -13,6 +13,41 @@ NO-GO** → **building to learn**; the business unknowns (OQ-wtp / niche / gemin
 are **untouched by design**. The "brains" (G1 authoring loop) is a deliberate
 later milestone; interim authoring = operator + Claude Code via the CLI.
 
+**Status update (2026-06-30): Now derived surfacing — PHASE B gate resolved by the operator;
+build proceeds only on the ungated carryover (Gate A still blocks the notification surface).**
+The loop stopped at the Phase-B gate (background geofence + LOCAL notifications, ADR 0043 §Phasing)
+and surfaced both gates as **INB-29**; operator answered in-session:
+- **Gate B — background-location posture: RATIFIED.** Operator "Accept ADR 0044 as written" →
+  **ADR 0044 Accepted** (the "Always" opt-in/reversible posture; LOCAL notifications only — no
+  FCM/APNs, no server change, dumb-server invariant intact; geofence nearest-N, iOS 20-region cap;
+  quiet-hours + daily-cap as device-local never-synced `RankConfig` knobs; `rank()` stays pure;
+  live position never leaves device).
+- **Gate A — ADR 0008 design-first: STILL OPEN (mockups + sign-off pending).** Operator asked for
+  a Claude Design prompt framing the feature as **opt-in**; delivered as
+  `designs/DESIGN-BRIEF-triggers-v2-phase-b.md` (self-contained; folds in INB-13 §6b + opt-in
+  ladder). **Phase-B implementation (geofence / local-notif / permission surfaces) stays BLOCKED
+  on signed-off mockups** — so the build loop does NOT proceed on those surfaces yet.
+- **Ungated carryover — ✅ BUILT + GREEN (operator "build it now"):** the render-driven record-shown
+  EFFECT now starts the anti-nag clock (foreground-only over the signed-off `now-derived/` feed; no
+  new permission/surface). TDD slice on branch `claude/now-derived-phase-b-*`:
+  - **`NowEngine`** (commonMain, HubEngine-style, debounced) is the sole surfacing writer:
+    render reports visible subjects → `noteShown` (coalesced) → `recordShownIfNew` → `surfacingFlow`
+    bridge → `SurfacingLoaded` → `state.surfacing` → next `nowFeed()` recompute. Unidirectional; the
+    render path NEVER writes surfacing. `dismiss` → `recordDismissed` → `rank()` omits the subject.
+  - **Write-once clock fix:** new SQL `recordShownIfNew` (`ON CONFLICT DO NOTHING`) so continuous
+    visibility STARTS the decay clock once and never RESETS it (overwriting `last_shown` each tick
+    would defeat softening). Decay/soften (dormant since Phase A — nothing wrote `last_shown`) now
+    engage. No schema change (query-only; `surfacing_state` unchanged).
+  - **Render wiring:** `FeedScreen` reports `RankedFeed.visibleSubjectKeys()` (prominent bands +
+    dedup peers, overflow excluded) via `LaunchedEffect(set)` → `onNowShown`, threaded through all 3
+    shells (desktop/iOS verified compile; Android = verbatim mirror, CI-verified — no SDK in build env).
+  - **579 client desktop tests green** (572 Phase-A baseline + 5 `NowEngineTest` + 2 `visibleSubjectKeys`);
+    `compileKotlinIosArm64` clean; `verifyMigrations` drift is the pre-existing ADR 0036 `media`
+    ordinal (CI-skipped) — my query-only addition verifies clean. **No visible dismiss CONTROL was
+    added** (it would need its own Phase-B/trigger mockup); the dismiss DATA path + omission are
+    built + tested. Grounding: `RankConfig` (`NowRank.kt:45`) + the "Quiet-hours deferred to Phase B"
+    note (`NowRank.kt:18-19`).
+
 **Status update (2026-06-30): Now derived surfacing — Phase A built (ADR 0043).** Operator
 ratified both gates in-session (INB-28): **ADR 0043 → Accepted** + `designs/now-derived/` **signed
 off**. Built as a TDD slice loop → **PR #257** (branch `claude/now-derived-surfacing-phase-a-*`):
