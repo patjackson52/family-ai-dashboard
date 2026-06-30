@@ -13,6 +13,25 @@ NO-GO** → **building to learn**; the business unknowns (OQ-wtp / niche / gemin
 are **untouched by design**. The "brains" (G1 authoring loop) is a deliberate
 later milestone; interim authoring = operator + Claude Code via the CLI.
 
+**Status update (2026-06-30): Now derived surfacing — PHASE B build loop STOPPED at the operator
+gate (no implementation code written).** Phase B (background geofence + LOCAL notifications, ADR
+0043 §Phasing) is **operator-gated on two things, and NEITHER is met**, so per the build discipline
+the loop stopped and surfaced the decision instead of deciding in the loop (→ **INB-29**):
+- **Gate A — ADR 0008 design-first: NOT met.** The Phase-B surface ("Always" location primer,
+  LOCAL notification + lock-screen, offline/geo=on) lives in the `triggers/` brief; only a
+  first-pass exists and **INB-13 is still open** (P0 honesty bug + the §6b v2 fix-list never handed
+  to Claude Design; no operator sign-off — contrast INB-28 which signed off `now-derived/` for
+  Phase A and *excluded* background location / notifications / new permission as Phase B).
+- **Gate B — background-location posture: NOT ratified.** The "Always" permission + disclosure
+  review (HARD GUARDRAIL #3/#4) is drafted as **ADR 0044 (Proposed)** — local notifications only
+  (no FCM/APNs, no server change; dumb-server invariant intact), geofence nearest-N (iOS 20-region
+  cap), quiet-hours + daily-cap as device-local never-synced `RankConfig` knobs, `rank()` stays
+  pure. Awaiting operator ratification.
+- **Separable/ungated:** the Phase-A carryover (render-driven record-shown EFFECT so anti-nag decay
+  starts) is foreground-only over the signed-off `now-derived/` feed and can be pulled forward
+  independently of both gates on operator say-so. Grounding confirmed: `RankConfig` (`NowRank.kt:45`)
+  + the explicit "Quiet-hours config is deferred to Phase B" note (`NowRank.kt:18-19`).
+
 **Status update (2026-06-30): Now derived surfacing — Phase A built (ADR 0043).** Operator
 ratified both gates in-session (INB-28): **ADR 0043 → Accepted** + `designs/now-derived/` **signed
 off**. Built as a TDD slice loop → **PR #257** (branch `claude/now-derived-surfacing-phase-a-*`):
