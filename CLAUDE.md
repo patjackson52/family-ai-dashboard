@@ -20,19 +20,22 @@ changes require an ADR.
 
 ## Current stage
 
-**Bootstrapped 2026-06-18; entering planning loop, Phase A (validation
-follow-through).** Validation round 1 verdict: **CONDITIONAL — learning-lab
-GO, standalone-business NO-GO** (the AI-briefing concept is commoditized by
-Gemini Daily Brief / Alexa+ / funded verticals; build to learn, not to bet
-on revenue). The one defensible wedge found: a **multi-member family-tenant
-briefing**, which no native OS ships. Deep planning
-runs as an autonomous loop over the waterfall board
-(`planning/workstreams.md`) per `processes/planning-loop.md` (ADR 0003):
-the operator sets values/direction and answers the inbox; agents deepen
-strategy, GTM, risk, specs, system design, ops, automations, marketing,
-acquisition, and infrastructure — gated, adversarially reviewed, P0
-viability re-attacked on cadence. Build starts only after the spec gates.
-Check `backlog/now.md` and `planning/workstreams.md` for the live front.
+**Bootstrapped 2026-06-18; build underway.** `backlog/now.md` is the live
+stage tracker — read it first. As of 2026-06-29: **M0 render prototype is
+built + cloud-live** (Vercel + Neon, rendering on-device); **M1 auth / family
+/ device-grant is implemented** in the API; **two-way member-writes are in
+active build** (toggle / delete / hide slices). Validation round 1 verdict
+still stands: **CONDITIONAL — learning-lab GO, standalone-business NO-GO**
+(the AI-briefing concept is commoditized by Gemini Daily Brief / Alexa+ /
+funded verticals; build to learn, not to bet on revenue) → **building to
+learn**; the business unknowns (WTP / niche / gemini) are untouched by
+design. The one defensible wedge found: a **multi-member family-tenant
+briefing**, which no native OS ships. Strategy / GTM / risk / spec deepening
+still runs as the autonomous planning loop over the waterfall board
+(`planning/workstreams.md`) per `processes/planning-loop.md` (ADR 0003): the
+operator sets values/direction and answers the inbox; agents deepen the
+non-build workstreams — gated, adversarially reviewed, P0 viability
+re-attacked on cadence.
 
 **If asked to "run a loop iteration":** follow `processes/planning-loop.md`
 end to end, including the journal entry and inbox/digest close-out.

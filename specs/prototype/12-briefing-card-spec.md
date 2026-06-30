@@ -32,8 +32,9 @@ groceries? **[list]**", "school email needs an RSVP **[reply]**". Today the sche
 has **three** distinct things, and they are **not** interchangeable:
 
 1. **`target` (internal nav)** — `{hubId, sectionId, blockId}` → deep-links into
-   a Hub/Section/Block *inside the app*. **Dormant at M0** (feed-only; Hub render
-   deferred). Lights up when Event Hubs render ships.
+   a Hub/Section/Block *inside the app*. **Live** — Event Hubs render has shipped;
+   a card's `target` routes into the hub detail and focuses the block (arrival
+   highlight). (Was dormant at the original M0 feed-only milestone.)
 2. **`actions[]` (ADR 0016, RESERVED)** — structured 2-way buttons / asks that a
    pull-loop processes. **Not built at MVP** — reserved so the wire shape is
    stable; the render layer ignores it for now.

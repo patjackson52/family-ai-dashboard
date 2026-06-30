@@ -60,7 +60,7 @@ property that ends when real members exist (see §6 migration note).
 | Entity | Table | Surface | Notes |
 |---|---|---|---|
 | **BriefingCard** | `briefing_cards` | **"Now"** feed (live at M0) | Self-contained; own table. Time-windowed. Optional deep-link `target{hubId,…}` + `hub_ref`. |
-| **Hub** | `hubs` | **Hubs** / Projects (authorable; render deferred) | Typed dossier; `status` planning\|active\|archived. Root of the content tree. |
+| **Hub** | `hubs` | **Hubs** / Projects (authorable + rendered, live) | Typed dossier; `status` planning\|active\|archived. Root of the content tree. |
 | **Section** | `sections` | child of Hub | ordering container |
 | **Block** | `blocks` | child of Section | typed (text/link/checklist/…); `payload` jsonb; `provenance` |
 | **Place** | `places` | reusable geo (family content) | `lat/lng` ciphertext-at-rest (ADR 0028); never live position |
@@ -231,7 +231,7 @@ retroactively). Restricting a resource is an explicit authored act thereafter.
 | | "Now" (`briefing_cards`) | "Hubs" (`hubs/sections/blocks`) |
 |---|---|---|
 | Own table? | **Yes** | Yes |
-| Rendered at M0? | **Yes** (live) | No (authorable, render deferred) |
+| Rendered? | **Yes** (live at M0) | **Yes** (live; list + detail tree + 9 block renderers + interactive toggle/delete/hide) |
 | Lifecycle | time-windowed (`not_before`/`expires_at`), ephemeral | persistent until archived |
 | Populated by | operator/CLI authoring; **incl. cards derived from imminent hub items** | operator/CLI authoring |
 | Reads from the other? | points *into* hubs (deep-link, client-side only) | does not read cards |
