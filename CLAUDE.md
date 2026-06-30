@@ -20,43 +20,34 @@ changes require an ADR.
 
 ## Current stage
 
-**Bootstrapped 2026-06-18; build underway.** `backlog/now.md` is the live
-stage tracker — read it first. As of 2026-06-29: **M0 render prototype is
-built + cloud-live** (Vercel + Neon, rendering on-device); **M1 auth / family
-/ device-grant is implemented** in the API; **two-way member-writes are in
-active build** (toggle / delete / hide slices). Validation round 1 verdict
-still stands: **CONDITIONAL — learning-lab GO, standalone-business NO-GO**
-(the AI-briefing concept is commoditized by Gemini Daily Brief / Alexa+ /
-funded verticals; build to learn, not to bet on revenue) → **building to
-learn**; the business unknowns (WTP / niche / gemini) are untouched by
-design. The one defensible wedge found: a **multi-member family-tenant
-briefing**, which no native OS ships. Strategy / GTM / risk / spec deepening
-still runs as the autonomous planning loop over the waterfall board
-(`planning/workstreams.md`) per `processes/planning-loop.md` (ADR 0003): the
-operator sets values/direction and answers the inbox; agents deepen the
-non-build workstreams — gated, adversarially reviewed, P0 viability
-re-attacked on cadence.
+**`backlog/now.md` is the live stage tracker — read it first.**
 
-**If asked to "run a loop iteration":** follow `processes/planning-loop.md`
-end to end, including the journal entry and inbox/digest close-out.
-**If asked to "bootstrap this project":** follow `BOOTSTRAP.md`.
-**If building/editing the apps (`apps/`):** read `processes/agent-dev-loop.md`
-first — the fixed toolchain (JDK17, Kotlin 2.3.20, redux-kotlin alpha01 gotchas)
-+ the cheap feedback loop (text action log, snapshot PNGs, devtools, cloud URL).
-The M0 prototype is **built + live** (Vercel+Neon; Android renders on-device) —
-see `specs/prototype/00-build-spec-plan.md`.
+As of 2026-06-30:
+- **M0 prototype built + cloud-live** (Vercel + Neon; Android renders on-device via Google sign-in → CLI device-login → content authoring → on-device render).
+- **M1 auth / family / device-grant — fully shipped** (S1–S6; Firebase, RFC 8628, per-hub scope).
+- **Two-way member-writes — built** (checklist toggle + delete + hide, ADRs 0038–0042). Phase B (AI member commands) EXPERIMENTAL/flagged.
+- **Now derived surfacing — Phase A built** (ADR 0043: on-device two-lane feed + priority engine + record-shown decay). **Phase B** (background geofence + local notifications, ADR 0044) blocked on design sign-off (INB-29 Gate A).
+- **Validation verdict** (round 1, 2026-06-18): **CONDITIONAL — learning-lab GO, business NO-GO**. The defensible wedge: multi-member family-tenant briefing (no native OS ships this). Build to learn; business unknowns (WTP, niche, Gemini) untouched by design. **Next P0 review: 2026-07-18.**
+
+**Quick routing:**
+- Loop iteration → `processes/planning-loop.md` end to end.
+- Building/editing apps → read `processes/agent-dev-loop.md` first (JDK17, Kotlin 2.3.20, redux-kotlin alpha01 gotchas; cheap feedback loop).
+- Authoring content (CLI + Claude) → `apps/cli/templates/README.md` + skill `.claude/skills/dayfold-curator/`.
+- Bootstrap → `BOOTSTRAP.md`.
 
 ## Directory map
 
 | Path | Holds | Authority |
 |---|---|---|
 | `CLAUDE.md` | This file — session protocol, governance | Source of truth |
+| `CHANGELOG.md` | Product, API, CLI feature history (newest-first) | Release reference |
 | `adr/` | Decision records + `decisions-index.md` | Source of truth (immutable once Accepted) |
 | `context/` | Values & direction (operator-owned), constitution, goals/constraints, kill switches, open questions, operating lessons | Source of truth |
 | `planning/` | Waterfall workstream board the loop executes | Live working state |
 | `research/` | Research reports with citations; validation reviews | Evidence (dated snapshots, never silently edited) |
 | `roadmap/` | Execution plan, milestone definitions (post-spec) | Source of truth for execution |
 | `specs/` | PRD, architecture, pricing model (post-validation) | Source of truth |
+| `designs/` | Hi-fi UI/UX mockups — design-first gate (ADR 0008) | Signed-off = build-ready |
 | `processes/` | Planning loop, agent routing, research workflow, fleet patterns, loop journal | Source of truth for process |
 | `backlog/` | `now.md` / `next.md` / `later.md` / `operator-inbox.md` | Working state |
 

@@ -13,6 +13,14 @@ NO-GO** → **building to learn**; the business unknowns (OQ-wtp / niche / gemin
 are **untouched by design**. The "brains" (G1 authoring loop) is a deliberate
 later milestone; interim authoring = operator + Claude Code via the CLI.
 
+**Status update (2026-06-30): Repo simplification + agentic optimization pass.** CHANGELOG.md
+created (product/API/CLI history, newest-first). README.md updated with architecture diagram +
+quick-start + CHANGELOG link. CLAUDE.md: current stage updated to 2026-06-30, added quick-routing
+table, added `designs/` + `CHANGELOG.md` to directory map. `processes/agent-dev-loop.md`: added
+TL;DR quick-reference table at top (reduces context needed for simple build tasks). CLI skill
+reference (`references/cli.md`): added missing `login`, `logout`, `delete/rm`, `update`, `version`
+commands (agents using the skill could not discover these commands previously).
+
 **Status update (2026-06-30): Now derived surfacing — PHASE B gate resolved by the operator;
 build proceeds only on the ungated carryover (Gate A still blocks the notification surface).**
 The loop stopped at the Phase-B gate (background geofence + LOCAL notifications, ADR 0043 §Phasing)

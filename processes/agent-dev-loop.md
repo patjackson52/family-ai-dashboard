@@ -1,5 +1,20 @@
 # Agent Dev Loop — build, test, observe (read this before touching the apps)
 
+## TL;DR — essential pins (don't re-derive these)
+
+| What | Value |
+|---|---|
+| JDK | 17 (brew symlink: `/opt/homebrew/opt/openjdk@17/…`) — use `JAVA_HOME`, not the versioned Cellar path |
+| Kotlin | 2.3.20 · Compose-MP 1.9.3 · AGP 9.2.1 · Gradle 9.4.1 |
+| Gradle root | `apps/` — **one root**, not per-module. Run `:client:<task>`, `:androidApp:<task>` from there |
+| redux-kotlin | `1.0.0-alpha01` — `store.selectorState{}` (not `selectorState(store)`); add `redux-kotlin-granular` explicitly |
+| API tests | `cd apps/api && npx vitest run` |
+| Client tests | `cd apps && JAVA_HOME=<jdk17> ./gradlew :client:desktopTest` |
+| On-device | `apps/scripts/ondevice-demo.sh` (seeds DB + starts API + installs APK) |
+| Verify UI | `rk snapshot` (headless render → PNG; Read to verify without device) |
+| Debug | action log → `adb logcat -s System.out:I \| grep redux`; or `rk devtools serve` (text, scriptable) |
+| Cloud URL | `https://family-ai-dashboard.vercel.app` |
+
 For future sessions: the **cheap, repeatable feedback loop** for each module, so
 you don't re-derive the toolchain (that's the token sink). Hypothesis (unproven,
 worth measuring): the **text action log** + **snapshot PNGs** + **devtools** let
