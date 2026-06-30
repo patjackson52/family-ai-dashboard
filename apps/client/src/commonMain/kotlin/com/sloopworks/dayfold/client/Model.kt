@@ -129,7 +129,7 @@ data class Attachment(val name: String? = null, val mime: String? = null, val si
 @Serializable
 data class CardPrivacy(val storage: String? = null)
 
-@Serializable data class Changes(val cards: List<Card> = emptyList(), val hubs: List<Hub> = emptyList(), val sections: List<HubSection> = emptyList(), val blocks: List<HubBlock> = emptyList())
+@Serializable data class Changes(val cards: List<Card> = emptyList(), val hubs: List<Hub> = emptyList(), val sections: List<HubSection> = emptyList(), val blocks: List<HubBlock> = emptyList(), val places: List<Place> = emptyList())
 @Serializable data class Tombstone(val type: String, val id: String)
 
 @Serializable
@@ -209,9 +209,59 @@ data class HubBlock(
   // (pre-stamp) block / loop-authored with no member author.
   @SerialName("created_by") val createdBy: String? = null,
   val version: Long = 1,                                     // ADR 0038 — server row version (If-Match base)
+  // ADR 0014/0043 Phase A — on-device trigger metadata (geo/when/activity). Decoded from /sync
+  // (schema/DB-present, client-absent until now); matched ON-DEVICE by deriveNow against the live
+  // clock/location — live position never leaves the device (ADR 0014). Dropped on the wire before.
+  val triggers: List<BlockTrigger>? = null,
   // ADR 0038 — client-only optimistic-write state ('pending'/'failed'/null=synced). Not on the
   // wire; @Transient so it never (de)serializes — it's projected from the local hub_block row.
   @kotlinx.serialization.Transient val localState: String? = null,
+)
+
+// ADR 0014/0043 — a single on-device trigger on a hub block. Exactly one of geo/when/activity is
+// set per element (the server stores them verbatim). Matched locally by deriveNow; never evaluated
+// server-side. `when` is a Kotlin hard keyword → the field is `whenTrigger`, wire name "when".
+@Serializable
+data class BlockTrigger(
+  val geo: TriggerGeo? = null,
+  @SerialName("when") val whenTrigger: TriggerWhen? = null,
+  val activity: TriggerActivity? = null,
+)
+
+@Serializable
+data class TriggerGeo(
+  val label: String? = null,
+  val lat: Double? = null,
+  val lng: Double? = null,
+  // geo-by-reference: resolves against the synced `places` set (ADR 0014 named place); falls back
+  // to inline lat/lng. Radius precedence: geo.radiusM → place.radiusM → DeriveConfig default.
+  @SerialName("place_ref") val placeRef: String? = null,
+  @SerialName("radius_m") val radiusM: Long? = null,
+)
+
+@Serializable
+data class TriggerWhen(
+  val at: String? = null,                                    // absolute instant/date the window fires at
+  val relative: String? = null,
+  val recurring: String? = null,
+  @SerialName("alert_offset") val alertOffset: String? = null,
+)
+
+@Serializable
+data class TriggerActivity(val kind: String? = null)        // biking|driving|running|walking (ADR 0014; Phase B)
+
+// ADR 0014 reusable named place (family content; encrypted at rest at M1, never live position).
+// Synced via Changes.places + a "place" tombstone. The deriver reads these for geo-proximity and to
+// resolve a trigger's place_ref. Server-served (schema-present); client cached it for the first time.
+@Serializable
+data class Place(
+  val id: String,
+  val kind: String? = null,                                  // home | school | store | other
+  val label: String,
+  val lat: Double,
+  val lng: Double,
+  @SerialName("radius_m") val radiusM: Long? = null,
+  val version: Long? = null,
 )
 
 // Flat, lenient block payload — the server stores each block type's fields directly

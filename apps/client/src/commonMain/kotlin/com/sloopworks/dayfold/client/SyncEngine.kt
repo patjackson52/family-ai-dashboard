@@ -120,6 +120,7 @@ class SyncEngine(
         tombstones = resp.tombstones,
         nextCursor = resp.nextCursor,
         nowIso = nowProvider(),
+        changedPlaces = resp.changes.places,   // ADR 0043 Phase A — cache named places
       )
       hasMore = resp.hasMore
     }
