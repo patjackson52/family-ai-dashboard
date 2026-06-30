@@ -142,8 +142,9 @@ private fun DerivedNowCard(item: NowItem, emphasized: Boolean, softened: Boolean
     tap = tap.clickable { onAction(CardAction.OpenHub(t.hubId, t.blockId)) }
       .semantics { contentDescription = "Open ${item.title} in its hub" }
   }
-  // Always apply the border (0.dp = invisible) so the de-emphasis spring animates OUT, not snaps.
-  tap = tap.border(BorderStroke(ringWidth, cs.primary), shape)
+  // Apply the ring while it has width — renders during the de-emphasis spring (animates OUT, not
+  // snaps) yet leaves a non-emphasized card perfectly plain (no 0.dp hairline).
+  if (ringWidth > 0.dp) tap = tap.border(BorderStroke(ringWidth, cs.primary), shape)
   ElevatedCard(tap, shape = shape) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (emphasized) NearbyPulse()
