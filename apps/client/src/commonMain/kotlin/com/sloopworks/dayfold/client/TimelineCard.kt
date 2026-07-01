@@ -1,5 +1,6 @@
 package com.sloopworks.dayfold.client
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -32,16 +36,325 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sloopworks.dayfold.client.theme.LocalDayfoldColors
 
-// ADR 0045 — hub-timeline card composable (Phase 1: day card).
-// Task 11a: day branch only; Task 11b adds the Hub/roadmap branch.
+// ADR 0045 — hub-timeline card composable (Day + Hub/roadmap branches).
+// Task 11a: day branch; Task 11b: Hub/roadmap branch.
 
 @Composable
 fun TimelineCard(model: TimelineCardModel, onOpen: () -> Unit) {
     when (model.scale) {
         TimelineScale.Day -> TimelineDayCard(model, onOpen)
-        TimelineScale.Hub -> Box(Modifier) { /* TODO 11b roadmap */ }
+        TimelineScale.Hub -> TimelineRoadmapCard(model, onOpen)
     }
 }
+
+// ── Roadmap (Hub) card ────────────────────────────────────────────────────────
+
+@Composable
+private fun TimelineRoadmapCard(model: TimelineCardModel, onOpen: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+        color = cs.surfaceContainerHigh,
+        shape = RoundedCornerShape(22.dp),
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp).padding(top = 18.dp, bottom = 15.dp)) {
+            val spine = model.spine
+            if (!spine.isNullOrEmpty()) {
+                RoadmapSpine(spine, model.moreCount)
+            }
+            if (model.nextCallout != null) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 13.dp),
+                    color = cs.outlineVariant,
+                )
+                NextMilestoneRow(model.nextCallout)
+            }
+            RoadmapFooterRow(onOpen)
+        }
+    }
+}
+
+// ── Phase spine ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun RoadmapSpine(spine: List<SpineNode>, moreCount: Int) {
+    val cs = MaterialTheme.colorScheme
+    val totalNodes = spine.size + (if (moreCount > 0) 1 else 0)
+    // Index of the Next node; fall back to last Done if none (all-done roadmap).
+    val fillEndIdx = spine.indexOfFirst { it.status == StopStatus.Next }
+        .let { idx -> if (idx >= 0) idx else spine.indexOfLast { it.status == StopStatus.Done } }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp)
+            .padding(top = 2.dp, bottom = 4.dp),
+    ) {
+        // Track + fill drawn on a Canvas behind the node Row
+        Canvas(modifier = Modifier.fillMaxWidth().height(46.dp)) {
+            val trackY = 6.dp.toPx()
+            val trackH = 3.dp.toPx()
+            val padX = 5.dp.toPx()
+            val trackStart = padX
+            val trackW = size.width - 2 * padX
+
+            // Full track (outlineVariant)
+            drawRoundRect(
+                color = cs.outlineVariant,
+                topLeft = Offset(trackStart, trackY),
+                size = Size(trackW, trackH),
+                cornerRadius = CornerRadius(trackH / 2f, trackH / 2f),
+            )
+            // Fill (secondary) up to fillEndIdx
+            if (fillEndIdx >= 0 && totalNodes > 1) {
+                val fillFrac = fillEndIdx.toFloat() / (totalNodes - 1)
+                drawRoundRect(
+                    color = cs.secondary,
+                    topLeft = Offset(trackStart, trackY),
+                    size = Size(trackW * fillFrac, trackH),
+                    cornerRadius = CornerRadius(trackH / 2f, trackH / 2f),
+                )
+            }
+        }
+
+        // Node columns overlaid with SpaceBetween
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            spine.forEach { node ->
+                SpineNodeColumn(node)
+            }
+            if (moreCount > 0) {
+                SpineMoreColumn(moreCount)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpineNodeColumn(node: SpineNode) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        when (node.status) {
+            StopStatus.Done -> Box(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(11.dp)
+                    .background(cs.secondary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = DayfoldIcons.Check,
+                    contentDescription = null,
+                    tint = cs.onSecondary,
+                    modifier = Modifier.size(8.dp),
+                )
+            }
+            StopStatus.Next -> Box(
+                modifier = Modifier
+                    .size(15.dp)
+                    .background(cs.primary, CircleShape),
+            )
+            StopStatus.Upcoming -> Box(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(11.dp)
+                    .background(cs.surfaceContainer, CircleShape)
+                    .border(2.dp, cs.outline, CircleShape),
+            )
+        }
+        Text(
+            text = node.label.take(3),
+            fontSize = 11.sp,
+            fontWeight = if (node.status == StopStatus.Next) FontWeight.Bold else FontWeight.W500,
+            color = if (node.status == StopStatus.Next) cs.onSurface else cs.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun SpineMoreColumn(moreCount: Int) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(11.dp)
+                .background(cs.outlineVariant, CircleShape),
+        )
+        Text(
+            text = "+$moreCount",
+            fontSize = 9.sp,
+            fontWeight = FontWeight.W500,
+            color = cs.onSurfaceVariant,
+        )
+    }
+}
+
+// ── Next milestone callout ────────────────────────────────────────────────────
+
+private val MONTHS_3 = arrayOf(
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+)
+
+/** Returns (3-letter month ALL-CAPS, day number string) from an ISO date/datetime string. */
+private fun calloutMonthDay(at: String): Pair<String, String>? {
+    val datePart = at.substringBefore("T").trim()
+    val parts = datePart.split("-")
+    if (parts.size < 3) return null
+    val monthIdx = (parts[1].toIntOrNull() ?: return null) - 1
+    val day = parts[2].toIntOrNull() ?: return null
+    if (monthIdx !in 0..11) return null
+    return MONTHS_3[monthIdx] to day.toString()
+}
+
+/** Returns "Mon D" (e.g. "Aug 25") from an ISO date/datetime string. */
+private fun calloutDateLabel(at: String): String {
+    val (mon, day) = calloutMonthDay(at) ?: return at
+    val mon3cap = mon[0] + mon.substring(1).lowercase()  // "AUG" → "Aug"
+    return "$mon3cap $day"
+}
+
+@Composable
+private fun NextMilestoneRow(callout: PresentedStop) {
+    val cs = MaterialTheme.colorScheme
+    val (mon, day) = calloutMonthDay(callout.stop.at) ?: Pair("", "")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // Date tile: primary background, month + big day
+        Column(
+            modifier = Modifier
+                .background(cs.primary, RoundedCornerShape(13.dp))
+                .padding(horizontal = 13.dp, vertical = 7.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = mon,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.08.sp,
+                color = cs.onPrimary,
+            )
+            Text(
+                text = day,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 22.sp,
+                color = cs.onPrimary,
+            )
+        }
+
+        // Right side: chip + date label + title
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(cs.primary, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "NEXT",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.04.sp,
+                        color = cs.onPrimary,
+                    )
+                }
+                Text(
+                    text = calloutDateLabel(callout.stop.at),
+                    fontSize = 11.5.sp,
+                    color = cs.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = callout.stop.title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 18.4.sp,
+                color = cs.onSurface,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+// ── Roadmap footer ────────────────────────────────────────────────────────────
+
+@Composable
+private fun RoadmapFooterRow(onOpen: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val ext = LocalDayfoldColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(top = 13.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Text(
+                text = "Open roadmap",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = cs.primary,
+            )
+            Icon(
+                imageVector = DayfoldIcons.ArrowOutward,
+                contentDescription = null,
+                tint = cs.primary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+
+        // "Added to this hub" provenance chip (decorative, same as day card)
+        Row(
+            modifier = Modifier
+                .background(ext.providerChip, RoundedCornerShape(8.dp))
+                .border(1.dp, ext.providerChipOutline, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = DayfoldIcons.AutoAwesome,
+                contentDescription = null,
+                tint = ext.onProviderChip,
+                modifier = Modifier.size(13.dp),
+            )
+            Text(
+                text = "Added to this hub",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = ext.onProviderChip,
+            )
+        }
+    }
+}
+
+// ── Day card ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun TimelineDayCard(model: TimelineCardModel, onOpen: () -> Unit) {

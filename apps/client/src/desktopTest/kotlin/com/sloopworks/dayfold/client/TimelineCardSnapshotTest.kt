@@ -44,7 +44,7 @@ class TimelineCardSnapshotTest {
         return presentTimelineCard(tl, "2026-08-24T10:40:00-04:00", ny)!!
     }
 
-    private fun shot(name: String, dark: Boolean) = runComposeUiTest {
+    private fun shot(name: String, dark: Boolean, model: TimelineCardModel = dayModel()) = runComposeUiTest {
         setContent {
             DayfoldTheme(darkTheme = dark) {
                 Box(
@@ -53,7 +53,7 @@ class TimelineCardSnapshotTest {
                         .background(Color(0xFFE9DDD7))
                         .padding(16.dp)
                 ) {
-                    TimelineCard(dayModel(), onOpen = {})
+                    TimelineCard(model, onOpen = {})
                 }
             }
         }
@@ -63,10 +63,28 @@ class TimelineCardSnapshotTest {
             .let { dir -> ImageIO.write(img.toAwtImage(), "png", File(dir, "$name.png")) }
     }
 
+    private fun hubModel(): TimelineCardModel {
+        // 5 date-only stops spanning May-Sep 2026 → dateOnlyCount=5 ≥ 3 → Hub scale.
+        // Aug 25 is the Next stop (midnight Aug 25 > nowIso 10am Aug 24 in NY).
+        val tl = Timeline(
+            tz = "America/New_York",
+            stops = listOf(
+                Stop("2026-05-01", "Planning phase"),
+                Stop("2026-06-01", "Design complete"),
+                Stop("2026-07-01", "Dev alpha"),
+                Stop("2026-08-25", "Move-in day"),
+                Stop("2026-09-15", "Launch"),
+            )
+        )
+        return presentTimelineCard(tl, "2026-08-24T10:00:00-04:00", ny)!!
+    }
+
     // ── Snapshot tests ─────────────────────────────────────────────────────────
 
     @Test fun dayLight() = shot("timeline-card-day-light", false)
     @Test fun dayDark()  = shot("timeline-card-day-dark",  true)
+    @Test fun hubLight() = shot("timeline-card-hub-light", false, hubModel())
+    @Test fun hubDark()  = shot("timeline-card-hub-dark",  true,  hubModel())
 
     // ── Behavioral assertions ─────────────────────────────────────────────────
     // Verify the card renders real content — not just non-empty pixels.
@@ -97,6 +115,25 @@ class TimelineCardSnapshotTest {
 
     @Test fun showsProvenanceChip() = runComposeUiTest {
         setContent { DayfoldTheme { TimelineCard(dayModel(), onOpen = {}) } }
+        onNodeWithText("Added to this hub").assertExists()
+    }
+
+    // ── Hub behavioral assertions ─────────────────────────────────────────────
+
+    @Test fun hubShowsMonthLabel() = runComposeUiTest {
+        setContent { DayfoldTheme { TimelineCard(hubModel(), onOpen = {}) } }
+        // Spine node for August: SpineNode(label="AUGUST", …).take(3) = "AUG"
+        onNodeWithText("AUG", substring = true).assertExists()
+    }
+
+    @Test fun hubShowsNextTitle() = runComposeUiTest {
+        setContent { DayfoldTheme { TimelineCard(hubModel(), onOpen = {}) } }
+        // nextCallout.stop.title = "Move-in day"
+        onNodeWithText("Move-in day", substring = true).assertExists()
+    }
+
+    @Test fun hubShowsProvenanceChip() = runComposeUiTest {
+        setContent { DayfoldTheme { TimelineCard(hubModel(), onOpen = {}) } }
         onNodeWithText("Added to this hub").assertExists()
     }
 }
