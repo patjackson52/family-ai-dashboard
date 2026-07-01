@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.WbTwilight
@@ -47,7 +49,11 @@ import com.sloopworks.dayfold.client.ui.loading.rememberStableLoading
 // Composable (commonMain-compatible) — the Android/iOS/desktop shells host it.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccount: () -> Unit = {}, onConnectDevice: () -> Unit = {}, onNavHubs: () -> Unit = {}, onRefresh: () -> Unit = {}) {
+// listState is HOISTED (defaulted for standalone/tests) so the feed's scroll position survives the
+// Now→detail→Now round-trip: the feed leaves the container-transform AnimatedContent when a detail opens
+// and would otherwise lose an internally-remembered LazyListState on dispose. ContentHost owns the stable
+// instance.
+fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccount: () -> Unit = {}, onConnectDevice: () -> Unit = {}, onNavHubs: () -> Unit = {}, onRefresh: () -> Unit = {}, listState: LazyListState = rememberLazyListState()) {
   Scaffold(
     topBar = {
     TopAppBar(
@@ -108,6 +114,7 @@ fun FeedScreen(state: AppState, onAction: (CardAction) -> Unit = {}, onOpenAccou
       ) {
         LazyColumn(
           Modifier.fillMaxSize(),
+          state = listState,
           contentPadding = PaddingValues(16.dp),
           verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

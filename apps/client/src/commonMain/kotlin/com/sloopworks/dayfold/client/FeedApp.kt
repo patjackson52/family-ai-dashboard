@@ -232,14 +232,23 @@ private fun ContentHost(store: Store<AppState>, state: AppState, handle: (CardAc
   val popTarget: String? = state.detailStack.getOrNull(state.detailStack.lastIndex - 1)
   val seekable = remember { SeekableTransitionState<String?>(targetKey) }
   val reduceMotion = rememberReduceMotion()
+  // Hoisted ABOVE the AnimatedContent so the feed's scroll position survives Now→detail→Now: the feed
+  // (id == null) is disposed when a detail opens, so an internally-remembered LazyListState would reset
+  // to top on return. ContentHost is stable (a detail is a sub-state of Route.Feed), so this persists.
+  val feedListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-  // Redux -> animation sync for NON-gesture transitions. The gesture path drives the
-  // seekable directly and dispatches NavBack on commit; afterwards targetKey == the
-  // settled state, so this no-ops.
+  // Redux -> animation sync for NON-gesture transitions (tap-open, hero-arrow/hardware back,
+  // deep pops). The gesture path drives the seekable directly and dispatches NavBack on commit;
+  // afterwards targetKey == the settled state, so this no-ops.
+  // Easing: default (FastOutSlowIn) — a from-REST open/close needs a symmetric ease-in-out so the
+  // whole morph is visible. Do NOT use a front-loaded decelerate curve here (e.g. emphasized-
+  // decelerate, ~80% of travel in the first frame): on a from-rest transition it collapses the morph
+  // into a one-frame blip (the pre-fix regression). The gesture settle below is momentum-driven, so
+  // it uses a spring instead.
   LaunchedEffect(targetKey) {
     if (seekable.currentState != targetKey) {
       if (reduceMotion) seekable.snapTo(targetKey)
-      else seekable.animateTo(targetKey, animationSpec = tween(if (targetKey != null) 360 else 280, easing = EmphasizedDecelerate))
+      else seekable.animateTo(targetKey, animationSpec = tween(if (targetKey != null) 360 else 280))
     }
   }
 
@@ -248,14 +257,18 @@ private fun ContentHost(store: Store<AppState>, state: AppState, handle: (CardAc
   // skip the scrub, jump to commit. The scrub is clamped < 1f so only the explicit
   // commit animateTo finishes the morph (a front-loaded decelerate can hit 1f while the
   // finger is still down — without the clamp the detail would visually vanish pre-commit).
+  // SETTLE spec is a SPRING (BackSettleSpring): the settle starts from the finger's partial
+  // position, and re-applying a front-loaded tween to the REMAINING span jumps it (abrupt on a
+  // quick low-progress release). A no-bounce spring continues to rest naturally over whatever
+  // distance is left — short remaining → quick, long → smooth.
   PredictiveBackHandler(enabled = detail != null) { progress ->
     try {
       progress.collect { e -> if (!reduceMotion) seekable.seekTo(decelerateProgress(e.progress).coerceAtMost(0.999f), targetState = popTarget) }
-      if (!reduceMotion) seekable.animateTo(popTarget, animationSpec = tween(280, easing = EmphasizedDecelerate))
+      if (!reduceMotion) seekable.animateTo(popTarget, animationSpec = BackSettleSpring)
       store.dispatch(NavBack)                    // COMMIT
     } catch (e: CancellationException) {
       val back = detail?.id
-      if (!reduceMotion && back != null) seekable.animateTo(back, animationSpec = tween(280, easing = EmphasizedDecelerate))
+      if (!reduceMotion && back != null) seekable.animateTo(back, animationSpec = BackSettleSpring)
       throw e                                    // CANCEL — must rethrow
     }
   }
@@ -278,7 +291,7 @@ private fun ContentHost(store: Store<AppState>, state: AppState, handle: (CardAc
       ) {
         val card = id?.let { cid -> state.cards.find { it.id == cid } }
         if (card != null) DetailScreen(card, onBack = { store.dispatch(NavBack) }, onAction = handle)
-        else FeedScreen(state, onAction = handle, onOpenAccount = { store.dispatch(OpenAccount) }, onConnectDevice = onConnectDevice, onNavHubs = onNavHubs, onRefresh = onRefresh)
+        else FeedScreen(state, onAction = handle, onOpenAccount = { store.dispatch(OpenAccount) }, onConnectDevice = onConnectDevice, onNavHubs = onNavHubs, onRefresh = onRefresh, listState = feedListState)
       }
     }
   }

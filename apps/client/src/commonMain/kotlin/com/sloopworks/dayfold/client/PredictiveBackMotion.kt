@@ -2,10 +2,16 @@ package com.sloopworks.dayfold.client
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 
-// ADR 0022 emphasized-decelerate — the settle curve played on commit/cancel (the
-// tail animation; the drag itself tracks the finger via SeekableTransitionState).
-val EmphasizedDecelerate: Easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
+// The back-gesture SETTLE (commit/cancel) spec. A no-bounce spring, because the settle
+// begins at the finger's partial position: a spring continues to rest over whatever distance
+// remains (short → quick, long → smooth) with no front-load jump and no overshoot. MediumLow
+// stiffness ≈ a calm ~300ms settle that matches the tap-open/close feel.
+val BackSettleSpring: FiniteAnimationSpec<Float> =
+  spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
 
 // Standard decelerate (≈ PathInterpolator(0,0,0,1)). Google: feed the predictive-back
 // preview a decelerate curve, never raw-linear progress, so motion is more apparent
