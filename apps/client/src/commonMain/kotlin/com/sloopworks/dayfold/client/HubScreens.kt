@@ -60,7 +60,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import com.sloopworks.dayfold.client.cards.CardAction
 import com.sloopworks.dayfold.client.cards.vettedOpenUri
+import kotlinx.datetime.TimeZone
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -253,8 +255,22 @@ fun HubDetailScreen(
   onHideBlock: (String) -> Unit = {},
   onUnhideBlock: (String) -> Unit = {},
   onSetShowHidden: (Boolean) -> Unit = {},
+  // ADR 0045 — hub timeline card + detail overlay (Task 13a: static integration, no shared-element morph)
+  onOpenTimeline: (TimelineScale) -> Unit = {},
+  onCloseTimeline: () -> Unit = {},
+  onTimelineAction: (CardAction) -> Unit = {},
 ) {
   val tree = state.currentHubTree
+  // ADR 0045: compute once — used by both the hoisted TimelineCard item and the detail overlay
+  val tl = tree?.hub?.timeline
+  val tz = tl?.let { runCatching { TimeZone.of(it.tz) }.getOrElse { TimeZone.currentSystemDefault() } }
+    ?: TimeZone.currentSystemDefault()
+  val nowIso = kotlin.time.Clock.System.now().toString()
+  // ADR 0045 13a: full-screen swap — render detail exclusively when open; TimelineDetail owns
+  // its own background (cs.surface). 13b will layer Scaffold+detail for shared-element morph.
+  if (state.timelineDetail != null && tl != null) {
+    TimelineDetail(tl, state.timelineDetail!!, nowIso, tz, onBack = onCloseTimeline, onAction = onTimelineAction)
+  } else {
   Scaffold(
     topBar = {
       TopAppBar(
@@ -360,6 +376,15 @@ fun HubDetailScreen(
             )
           }
         }
+        // ADR 0045: hoisted timeline card — hub-level, above all content sections.
+        // presentTimelineCard selects Day vs Hub scale automatically from the stop cadence.
+        tl?.let { timeline ->
+          presentTimelineCard(timeline, nowIso, tz)?.let { model ->
+            item(key = "timeline") {
+              TimelineCard(model) { onOpenTimeline(model.scale) }
+            }
+          }
+        }
         // sections (ordered) each followed by their blocks (grouped by section_id). Hidden
         // blocks (W5) are filtered out of the live sections and collected into the one
         // "Hidden for you" section below — hide is a pure VIEW split, never a deletion (D4).
@@ -404,6 +429,7 @@ fun HubDetailScreen(
       }
     }
   }
+  } // closes else { Scaffold(...) }
 }
 
 // Pure: the LazyColumn item index of the focused block (or null = not present / no
