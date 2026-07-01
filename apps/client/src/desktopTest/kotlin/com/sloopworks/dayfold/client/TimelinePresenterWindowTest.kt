@@ -39,6 +39,28 @@ class TimelinePresenterWindowTest {
         assertEquals(1, c.tailCount)   // 16:30
     }
 
+    @Test fun `day scale scopes card + detail to the focal day, excluding roadmap stops`() {
+        // A both-scales timeline: 3 done roadmap milestones + a move-in-day intraday schedule.
+        val tl = Timeline(tz = "America/New_York", stops = listOf(
+            Stop("2026-05-01", "deposit", done = true),
+            Stop("2026-06-12", "housing", done = true),
+            Stop("2026-07-20", "orientation", done = true),
+            Stop("2026-08-24T07:30:00-04:00", "car loaded", done = true),
+            Stop("2026-08-24T11:00:00-04:00", "elevator"),
+            Stop("2026-08-24T14:00:00-04:00", "bookstore"),
+            Stop("2026-08-28", "classes"),
+        ))
+        val c = presentTimelineCard(tl, "2026-06-30T10:00:00-04:00", ny)!!
+        assertEquals(TimelineScale.Day, c.scale)          // focal day (Aug 24) has intraday stops
+        assertEquals(1, c.doneCount)                       // only the focal day's done stop (car loaded), not the 3 roadmap
+        assertEquals(2, c.window.size)                     // elevator + bookstore
+        assertEquals(0, c.tailCount)                       // Aug 28 (roadmap) is NOT in the day view
+        // detail day view groups only focal-day stops
+        val d = presentTimelineDetail(tl, TimelineScale.Day, "2026-06-30T10:00:00-04:00", ny)
+        val titles = d.groups.flatMap { g -> g.stops.map { it.stop.title } }
+        assertEquals(listOf("car loaded", "elevator", "bookstore"), titles)
+    }
+
     @Test fun `empty timeline returns null card`() {
         assertNull(presentTimelineCard(Timeline(tz = "UTC", stops = emptyList()), "2026-08-24T10:40:00-04:00", ny))
     }

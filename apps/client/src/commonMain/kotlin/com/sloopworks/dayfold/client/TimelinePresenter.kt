@@ -188,10 +188,10 @@ data class TimelineCardModel(
 /**
  * Returns a [TimelineCardModel] for the given timeline, or null if [tl.stops] is empty.
  *
- * Day card:
- *  - doneCount = count of Done stops
- *  - window = up to 3 non-Done stops from the Next stop onward
- *  - tailCount = remaining non-Done stops after the window
+ * Day card (scoped to the focal day; roadmap-only stops are excluded and shown in the Hub scale):
+ *  - doneCount = count of Done stops on the focal day
+ *  - window = up to 3 non-Done focal-day stops from the Next stop onward
+ *  - tailCount = remaining non-Done focal-day stops after the window
  *  - nowTimeLabel = clockTime(now, tz) iff the focal day is today; else null
  *
  * Hub/roadmap card:
@@ -207,16 +207,19 @@ fun presentTimelineCard(tl: Timeline, nowIso: String, tz: TimeZone): TimelineCar
 
     return when (scale) {
         TimelineScale.Day -> {
-            val doneCount = presented.count { it.status == StopStatus.Done }
-            val nonDone = presented.filter { it.status != StopStatus.Done }
+            // Day scale is the focal day's schedule — scope to that date (a timeline may also
+            // carry multi-month roadmap stops, reachable via the detail's "Whole hub" toggle).
+            val focal = focalDay(tl, nowIso, tz)
+            val dayStops = presented.filter { it.instant?.toLocalDateTime(tz)?.date == focal }
+            val doneCount = dayStops.count { it.status == StopStatus.Done }
+            val nonDone = dayStops.filter { it.status != StopStatus.Done }
             val window = nonDone.take(3)
             val tailCount = nonDone.size - window.size
 
-            // nowTimeLabel only when focal day is today
+            // nowTimeLabel only when the focal day is today
             val now = parseInstantFlexible(nowIso, tz)
             val today = now?.toLocalDateTime(tz)?.date
-            val focalIsToday = presented.any { it.instant?.toLocalDateTime(tz)?.date == today }
-            val nowTimeLabel = if (focalIsToday && now != null) clockTime(now, tz) else null
+            val nowTimeLabel = if (focal != null && focal == today && now != null) clockTime(now, tz) else null
 
             TimelineCardModel(
                 scale = TimelineScale.Day,
@@ -304,9 +307,12 @@ fun presentTimelineDetail(tl: Timeline, scale: TimelineScale, nowIso: String, tz
 
     return when (scale) {
         TimelineScale.Day -> {
-            val morning = presented.filter { (it.instant?.toLocalDateTime(tz)?.hour ?: 0) < 12 }
-            val afternoon = presented.filter { val h = it.instant?.toLocalDateTime(tz)?.hour ?: 0; h in 12..16 }
-            val evening = presented.filter { (it.instant?.toLocalDateTime(tz)?.hour ?: 0) >= 17 }
+            // Scope to the focal day (the roadmap stops live in the Hub scale).
+            val focal = focalDay(tl, nowIso, tz)
+            val dayStops = presented.filter { it.instant?.toLocalDateTime(tz)?.date == focal }
+            val morning = dayStops.filter { (it.instant?.toLocalDateTime(tz)?.hour ?: 0) < 12 }
+            val afternoon = dayStops.filter { val h = it.instant?.toLocalDateTime(tz)?.hour ?: 0; h in 12..16 }
+            val evening = dayStops.filter { (it.instant?.toLocalDateTime(tz)?.hour ?: 0) >= 17 }
 
             val groups = buildList {
                 if (morning.isNotEmpty()) add(TimelineGroup("MORNING", morning))
@@ -321,8 +327,7 @@ fun presentTimelineDetail(tl: Timeline, scale: TimelineScale, nowIso: String, tz
 
             val now = parseInstantFlexible(nowIso, tz)
             val today = now?.toLocalDateTime(tz)?.date
-            val focalIsToday = presented.any { it.instant?.toLocalDateTime(tz)?.date == today }
-            val nowTimeLabel = if (focalIsToday && now != null) clockTime(now, tz) else null
+            val nowTimeLabel = if (focal != null && focal == today && now != null) clockTime(now, tz) else null
 
             PresentedTimeline(scale = TimelineScale.Day, groups = groups, nowIndex = nowIdx, nowTimeLabel = nowTimeLabel)
         }

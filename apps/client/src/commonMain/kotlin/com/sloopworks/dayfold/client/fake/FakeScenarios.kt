@@ -167,16 +167,26 @@ object FakeScenarios {
     countdownTo = "2026-08-01T00:00:00Z", visibility = "family", createdBy = "u_owner",
     media = HubMedia(heroUrl = mascotHero, heroFit = "cover", icon = "school",
       accentColor = "#13294b", imageAlt = "Butler Blue, the Butler University bulldog mascot"),
-    // ADR 0045: an authored timeline (roadmap scale — the client renders it on-device).
-    timeline = Timeline(title = "Roadmap", tz = "America/New_York", stops = listOf(
+    // ADR 0045: an authored timeline with BOTH scales — a multi-month roadmap AND an intraday
+    // move-in-day schedule. The client auto-selects the day view (focal day = move-in) and offers
+    // the day↔hub scope toggle in the detail.
+    timeline = Timeline(title = "Move-in day", tz = "America/New_York", stops = listOf(
+      // roadmap milestones
       Stop(at = "2026-05-01", title = "Enrollment deposit paid", done = true, assignee = "Pat"),
       Stop(at = "2026-06-12", title = "Housing application submitted", done = true, assignee = "Lillian"),
-      Stop(at = "2026-07-20", title = "Orientation", assignee = "Lillian"),
-      Stop(at = "2026-08-24", title = "Move-in day", major = true, sub = "Henderson Hall, room 214",
-        assignee = "Pat + Lillian", attachments = listOf(
-          Attachment(kind = "nav", label = "Map", query = "Butler University Henderson Hall"),
-          Attachment(kind = "open", label = "Health forms",
-            ref = AttachmentRef(hubId = "h_college", sectionId = "s_college_health", blockId = "b_college_doc")))),
+      Stop(at = "2026-07-20", title = "Orientation completed", done = true, assignee = "Lillian"),
+      // move-in day (Aug 24) intraday schedule
+      Stop(at = "2026-08-24T07:30:00-04:00", title = "Car loaded",
+        sub = "Boxes, mini-fridge, bedding", assignee = "Pat", done = true),
+      Stop(at = "2026-08-24T09:50:00-04:00", title = "Checked in", done = true,
+        attachments = listOf(Attachment(kind = "nav", label = "Map", query = "Butler University Henderson Hall"))),
+      Stop(at = "2026-08-24T11:00:00-04:00", title = "Move-in — Henderson Hall", major = true,
+        sub = "Room 214 · 20-min elevator window", assignee = "Pat + Lillian",
+        attachments = listOf(Attachment(kind = "open", label = "Health forms",
+          ref = AttachmentRef(hubId = "h_college", sectionId = "s_college_health", blockId = "b_college_doc")))),
+      Stop(at = "2026-08-24T12:30:00-04:00", title = "Lunch break", sub = "Campus dining hall"),
+      Stop(at = "2026-08-24T14:00:00-04:00", title = "Bookstore & student ID"),
+      // later milestones
       Stop(at = "2026-08-28", title = "First day of classes", sub = "Syllabus week begins"),
       Stop(at = "2026-09-19", title = "Family weekend"),
     )))
