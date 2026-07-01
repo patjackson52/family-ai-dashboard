@@ -30,4 +30,13 @@ class TemplateTest {
       assertTrue(errs.isEmpty(), "template $name should pass validateHubTree(\"$resource\"), got: $errs")
     }
   }
+
+  @Test fun `timeline template is a hub body carrying a valid Hub_timeline (ADR 0045)`() {
+    assertTrue("timeline" in TEMPLATE_KINDS, "timeline not registered")
+    val hub = Json.parseToJsonElement(load("timeline")).jsonObject
+    assertTrue("type" in hub && "title" in hub && "timeline" in hub)
+    // It is pushed with --hub → must pass the same content-blind structural validation.
+    val errs = validateHubTree("hubs", load("timeline"))
+    assertTrue(errs.isEmpty(), "timeline template should pass validateHubTree(\"hubs\"), got: $errs")
+  }
 }

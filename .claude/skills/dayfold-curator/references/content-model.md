@@ -55,6 +55,46 @@ Per-type payload keys (the common ones):
   - `location`: `{ label, address?, mapUrl? }`
   - `budget`: `{ items: [{ label, amount, paid? }] }`
 
+## Hub `timeline` — an axis of time (ADR 0045)
+
+Optional hub property (a sibling of `sections`, **not** a block). Gives a dated hub an
+axis of time: the client lays the stops out on-device and picks the scale — an intraday
+**day** rail (live NOW line) or a multi-month **roadmap** — so the author never sets a
+scale. Author the irreducible **stops**; the client computes status / NOW / grouping /
+collapse. Start from `dayfold template timeline` (a hub body with a reference timeline),
+edit, then `push <hubId> hub.json --hub` (the same content-blind validation as any hub).
+
+```
+timeline: {
+  title?: string,               // detail header ("Move-in day")
+  tz: string,                   // REQUIRED IANA zone, e.g. "America/New_York" — the NOW line
+                                //   + day boundaries are evaluated in this zone (travels with the stops)
+  stops: [ {                    // REQUIRED, non-empty; author in any order (the client sorts)
+    at: string,                 // REQUIRED RFC-3339. Date-only "YYYY-MM-DD" = all-day (roadmap);
+                                //   with a time "…THH:MM:SS±offset" = intraday (day rail)
+    title: string,              // REQUIRED, one line
+    sub?: string,               // one supporting line ("Room 214 · 20-min window")
+    major?: boolean,            // a headline milestone → larger, starred in the detail
+    done?: boolean,             // author-complete; also auto-done once `at` < now
+    assignee?: string,          // free text ("Pat", "Pat + Maya") → initials avatar
+    attachments?: [ {           // OS-handoff or in-app jump chips
+      kind: "call"|"nav"|"link"|"open", label: string,
+      tel?: string,             // kind=call  → tel: (E.164)
+      query?: string,           // kind=nav   → maps search
+      url?: string,             // kind=link  → https
+      ref?: { hubId, sectionId?, blockId? }  // kind=open → in-app jump to another hub/section/block
+    } ]
+  } ]
+}
+```
+
+Rules the client applies (do **not** pre-compute these): a stop is *done* if `done` or
+its `at` is in the past; scale is auto-selected (day if the focal day has intraday stops,
+else roadmap when stops span >14 days or ≥3 date-only); the day view shows only the focal
+day; a roadmap with >6 month-nodes collapses a leading done-run into one `✓N`. One timeline
+per hub. Content-blind: the server stores + structurally validates only (never reads prose).
+Provenance is **authored** ("Added to this hub") — do not imply on-device derivation.
+
 ## Visual enrichment — `media` (ADR 0036)
 
 Optional, decorative, fail-safe (a card/hub renders fine without it). On a **card** or

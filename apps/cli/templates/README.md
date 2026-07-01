@@ -72,6 +72,25 @@ run an **always-on** structural pre-check (`validateHubTree`, no `--type` flag):
 - **block** — `sectionId` required; `type` ∈ `text` `markdown` `checklist` `link`
   `document` `contact` `location` `milestone` `budget`.
 
+### Hub `timeline` — an axis of time (ADR 0045)
+
+A dated hub can carry a `timeline` — a hub **property** (not a block), authored inside
+the hub body and pushed with `--hub`. `template timeline` emits a hub with a reference
+timeline (both scales + every attachment kind). You author the **stops**; the client lays
+them out on-device and auto-picks the scale (an intraday **day** rail with a live NOW line,
+or a multi-month **roadmap**) — no scale field to set.
+
+```
+dayfold template timeline > hub.json     # a hub body with a `timeline`
+# edit stops; replace the `open` attachment ref ids with real hub/section/block ids
+dayfold push <hubId> hub.json --hub      # validated (tz present, stops non-empty, each has a date)
+```
+
+Each stop needs `at` (RFC-3339; date-only = all-day, `…THH:MM…` = intraday) + `title`;
+optional `sub` / `major` / `done` / `assignee` / `attachments` (`call`/`nav`/`link`/`open`).
+Content-blind: the server validates structure only. See the curator skill's content-model
+reference for the full field list and the client rules (status, scale, collapse).
+
 The server stays the authority (CL-2) for the rest — parent ids resolving,
 ordering, field formats.
 

@@ -320,7 +320,8 @@ fun main(args: Array<String>) {
 
 private val CONTENT_TYPES = listOf("file", "link", "invite", "contact", "geo", "email")
 // card payload types + the hub-tree bodies (push with --hub/--section/--block).
-val TEMPLATE_KINDS = CONTENT_TYPES + listOf("hub", "section", "block")
+// "timeline" is a hub body carrying a Hub.timeline (ADR 0045) — push with --hub.
+val TEMPLATE_KINDS = CONTENT_TYPES + listOf("hub", "section", "block", "timeline")
 
 /** The content resource `push` targets — PUT /families/:fid/<resource>/:id.
  *  --hub | --section | --block author a hub tree; default is a briefing card.
@@ -465,7 +466,7 @@ internal val USAGE =
     "         --type runs local typed card validation before the server.\n" +
     "         body_md phone/email are auto-linked to tappable links; --no-linkify opts out)\n" +
     "  pull [--hub <id>]          read content back (cards+hubs, or one hub tree)\n" +
-    "  template <type>            starter body: a card type, or hub|section|block\n" +
+    "  template <type>            starter body: a card type, hub|section|block, or timeline\n" +
     "  delete <id> [--card] | rm  remove a hub (cascades sections+blocks) or a card\n" +
     "  update                     update to the latest dayfold (brew upgrade)\n" +
     "  version | --version       print the CLI version\n" +

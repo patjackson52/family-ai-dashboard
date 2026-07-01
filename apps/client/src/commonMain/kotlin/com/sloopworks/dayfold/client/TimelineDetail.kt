@@ -28,8 +28,15 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -49,7 +56,8 @@ import kotlinx.datetime.TimeZone
 
 // ADR 0045 — full timeline detail view: grouped sticky-header feed, NOW line,
 // entry rows with rail + content card, interactive attachment chips, provenance footnote.
-// Fixed scale — no toggle (deferred to Phase 2, v2 §9).
+// Opens at the auto-selected [scale]; a day↔hub scope toggle appears when both scales are
+// meaningful (ephemeral — resets to [scale] on each open).
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,7 +69,12 @@ fun TimelineDetail(
     onBack: () -> Unit,
     onAction: (CardAction) -> Unit,
 ) {
-    val presented = presentTimelineDetail(tl, scale, nowIso, tz)
+    // Both scales present → offer the ephemeral day↔hub scope toggle (resets to the
+    // auto-selected [scale] each time the detail is opened; spec §5).
+    val both = remember(tl, nowIso, tz) { hasBothScales(tl, nowIso, tz) }
+    var selectedScale by remember(scale) { mutableStateOf(scale) }
+    val active = if (both) selectedScale else scale
+    val presented = remember(tl, active, nowIso, tz) { presentTimelineDetail(tl, active, nowIso, tz) }
     val cs = MaterialTheme.colorScheme
 
     Column(
@@ -71,9 +84,12 @@ fun TimelineDetail(
     ) {
         // ── Header ───────────────────────────────────────────────────────────
         TlDetailHeader(
-            title = if (scale == TimelineScale.Hub) (tl.title ?: "Roadmap") else (tl.title ?: "Today"),
-            subtitle = if (scale == TimelineScale.Hub) "All milestones" else "Today’s schedule",
+            title = if (active == TimelineScale.Hub) (tl.title ?: "Roadmap") else (tl.title ?: "Today"),
+            subtitle = if (active == TimelineScale.Hub) "All milestones" else "Today’s schedule",
             onBack = onBack,
+            showToggle = both,
+            selected = active,
+            onSelect = { selectedScale = it },
         )
 
         // ── Feed ─────────────────────────────────────────────────────────────
@@ -88,7 +104,7 @@ fun TimelineDetail(
                 }
 
                 // Hub scale: NOW line just after the current-month group header
-                if (scale == TimelineScale.Hub && presented.nowIndex == groupIdx) {
+                if (active == TimelineScale.Hub && presented.nowIndex == groupIdx) {
                     item(key = "now_hub_$groupIdx") {
                         TlNowLine(presented.nowTimeLabel ?: "Today")
                     }
@@ -97,7 +113,7 @@ fun TimelineDetail(
                 group.stops.forEachIndexed { stopIdx, ps ->
                     val fi = flatIdx
                     // Day scale: NOW line before the stop at this flat index
-                    if (scale == TimelineScale.Day && presented.nowIndex == fi) {
+                    if (active == TimelineScale.Day && presented.nowIndex == fi) {
                         item(key = "now_day_$fi") {
                             TlNowLine(presented.nowTimeLabel ?: "")
                         }
@@ -105,7 +121,7 @@ fun TimelineDetail(
                     val isLast = groupIdx == presented.groups.lastIndex &&
                         stopIdx == group.stops.lastIndex
                     item(key = "stop_${groupIdx}_$stopIdx") {
-                        TlEntryRow(ps, isLast, scale, onAction)
+                        TlEntryRow(ps, isLast, active, onAction)
                     }
                     flatIdx++
                 }
@@ -113,7 +129,7 @@ fun TimelineDetail(
 
             // Day: NOW after every stop (i.e., after all)
             val totalFlat = flatIdx
-            if (scale == TimelineScale.Day && presented.nowIndex == totalFlat) {
+            if (active == TimelineScale.Day && presented.nowIndex == totalFlat) {
                 item(key = "now_day_end") {
                     TlNowLine(presented.nowTimeLabel ?: "")
                 }
@@ -121,7 +137,7 @@ fun TimelineDetail(
 
             // Provenance footnote
             item(key = "provenance") {
-                TlProvenanceCard(scale)
+                TlProvenanceCard(active)
             }
         }
     }
@@ -130,7 +146,14 @@ fun TimelineDetail(
 // ── Header ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun TlDetailHeader(title: String, subtitle: String, onBack: () -> Unit) {
+private fun TlDetailHeader(
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit,
+    showToggle: Boolean,
+    selected: TimelineScale,
+    onSelect: (TimelineScale) -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     Column(
         modifier = Modifier
@@ -166,6 +189,33 @@ private fun TlDetailHeader(title: String, subtitle: String, onBack: () -> Unit) 
             color = cs.onSurfaceVariant,
             modifier = Modifier.padding(top = 3.dp),
         )
+        // Day↔hub scope toggle — only when both scales are meaningful (spec §5/§6).
+        if (showToggle) {
+            Spacer(Modifier.height(14.dp))
+            val options = listOf(
+                TimelineScale.Day to ("This day" to DayfoldIcons.WbSunny),
+                TimelineScale.Hub to ("Whole hub" to DayfoldIcons.CalendarMonth),
+            )
+            SingleChoiceSegmentedButtonRow {
+                options.forEachIndexed { i, (scale, labelIcon) ->
+                    val (label, icon) = labelIcon
+                    SegmentedButton(
+                        selected = selected == scale,
+                        onClick = { onSelect(scale) },
+                        shape = SegmentedButtonDefaults.itemShape(i, options.size),
+                        icon = {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        },
+                    ) {
+                        Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -411,7 +461,8 @@ private fun TlEntryRow(
                     else              -> cs.onSurface
                 }
                 Text(
-                    text = tlStopTimeLabel(stop.at, scale),
+                    // Day = tz-aware "h:MM AM/PM"; Hub = "Mon D". Computed in the presenter.
+                    text = if (scale == TimelineScale.Hub) ps.dateLabel else (ps.timeLabel ?: ps.dateLabel),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = timeColor,
@@ -543,31 +594,6 @@ private fun TlProvenanceCard(scale: TimelineScale) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Format stop time for detail display. Day = "h:MM AM/PM"; Hub = "Mon D". */
-private fun tlStopTimeLabel(at: String, scale: TimelineScale): String {
-    if (scale == TimelineScale.Hub) {
-        val datePart = at.substringBefore("T").trim()
-        val parts = datePart.split("-")
-        if (parts.size < 3) return at
-        val monthIdx = (parts[1].toIntOrNull() ?: return at) - 1
-        val day = parts[2].toIntOrNull() ?: return at
-        if (monthIdx !in 0..11) return at
-        val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-        return "${months[monthIdx]} $day"
-    }
-    val timePart = at.substringAfter("T", "")
-        .substringBefore("-")
-        .substringBefore("+")
-    val parts = timePart.split(":")
-    if (parts.size < 2) return at
-    val h = parts[0].toIntOrNull() ?: return at
-    val m = parts[1].padStart(2, '0')
-    val h12 = (h % 12).let { if (it == 0) 12 else it }
-    val amPm = if (h < 12) "AM" else "PM"
-    return "$h12:$m $amPm"
-}
 
 /** Derive initials: "Pat + Maya" → "PM"; "Maya" → "MA". */
 private fun tlAssigneeInitials(name: String): String {

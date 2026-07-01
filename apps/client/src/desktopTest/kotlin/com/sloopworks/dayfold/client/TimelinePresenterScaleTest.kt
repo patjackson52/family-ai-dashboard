@@ -21,6 +21,23 @@ class TimelinePresenterScaleTest {
         assertEquals(TimelineScale.Hub, selectScale(roadmap(), "2026-08-24T10:00:00-04:00", ny))
     }
 
+    // A hub whose "today" is move-in day: an intraday schedule for today AND a multi-month roadmap.
+    private fun bothScales() = Timeline(tz = "America/New_York", stops = listOf(
+        Stop("2026-05-01", "planning"), Stop("2026-07-01", "deposit"),
+        Stop("2026-08-24T08:00:00-04:00", "load"), Stop("2026-08-24T11:00:00-04:00", "elevator"),
+        Stop("2026-09-19", "orientation")))
+
+    @Test fun `hasBothScales true when a today-schedule and a multi-month roadmap coexist`() {
+        assertEquals(true, hasBothScales(bothScales(), "2026-08-24T10:00:00-04:00", ny))
+        // auto-selection still prefers Day when today has intraday stops
+        assertEquals(TimelineScale.Day, selectScale(bothScales(), "2026-08-24T10:00:00-04:00", ny))
+    }
+
+    @Test fun `hasBothScales false for a pure intraday day and a pure roadmap`() {
+        assertEquals(false, hasBothScales(intraday(), "2026-08-24T10:00:00-04:00", ny))
+        assertEquals(false, hasBothScales(roadmap(), "2026-08-24T10:00:00-04:00", ny))
+    }
+
     @Test fun `now line only on the focal day when it is today`() {
         val day = stopStatuses(intraday().stops, "2026-08-24T10:00:00-04:00", ny)
         assertEquals(1, nowLineIndex(day, "2026-08-24T10:00:00-04:00", ny)) // after stop[0] (08:00), before stop[1] (11:00)

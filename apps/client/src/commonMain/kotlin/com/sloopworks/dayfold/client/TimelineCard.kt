@@ -136,50 +136,6 @@ private fun RoadmapSpine(spine: List<SpineNode>, moreCount: Int) {
 }
 
 @Composable
-private fun SpineNodeColumn(node: SpineNode) {
-    val cs = MaterialTheme.colorScheme
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        when (node.status) {
-            StopStatus.Done -> Box(
-                modifier = Modifier
-                    .padding(top = 2.dp)
-                    .size(11.dp)
-                    .background(cs.secondary, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = DayfoldIcons.Check,
-                    contentDescription = null,
-                    tint = cs.onSecondary,
-                    modifier = Modifier.size(8.dp),
-                )
-            }
-            StopStatus.Next -> Box(
-                modifier = Modifier
-                    .size(15.dp)
-                    .background(cs.primary, CircleShape),
-            )
-            StopStatus.Upcoming -> Box(
-                modifier = Modifier
-                    .padding(top = 2.dp)
-                    .size(11.dp)
-                    .background(cs.surfaceContainer, CircleShape)
-                    .border(2.dp, cs.outline, CircleShape),
-            )
-        }
-        Text(
-            text = node.label.take(3),
-            fontSize = 11.sp,
-            fontWeight = if (node.status == StopStatus.Next) FontWeight.Bold else FontWeight.W500,
-            color = if (node.status == StopStatus.Next) cs.onSurface else cs.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 private fun SpineMoreColumn(moreCount: Int) {
     val cs = MaterialTheme.colorScheme
     Column(
@@ -201,35 +157,65 @@ private fun SpineMoreColumn(moreCount: Int) {
     }
 }
 
+@Composable
+private fun SpineNodeColumn(node: SpineNode) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        when {
+            // ✓N collapsed done-run: filled secondary dot, no check glyph (the ✓ lives in the label)
+            node.collapsedCount != null -> Box(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(11.dp)
+                    .background(cs.secondary, CircleShape),
+            )
+            node.status == StopStatus.Done -> Box(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(11.dp)
+                    .background(cs.secondary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = DayfoldIcons.Check,
+                    contentDescription = null,
+                    tint = cs.onSecondary,
+                    modifier = Modifier.size(8.dp),
+                )
+            }
+            node.status == StopStatus.Next -> Box(
+                modifier = Modifier
+                    .size(15.dp)
+                    .background(cs.primary, CircleShape),
+            )
+            else -> Box(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(11.dp)
+                    .background(cs.surfaceContainer, CircleShape)
+                    .border(2.dp, cs.outline, CircleShape),
+            )
+        }
+        Text(
+            // collapsed node shows its full "✓N" label; month nodes abbreviate to 3 letters
+            text = if (node.collapsedCount != null) node.label else node.label.take(3),
+            fontSize = 11.sp,
+            fontWeight = if (node.status == StopStatus.Next) FontWeight.Bold else FontWeight.W500,
+            color = if (node.status == StopStatus.Next) cs.onSurface else cs.onSurfaceVariant,
+        )
+    }
+}
+
 // ── Next milestone callout ────────────────────────────────────────────────────
-
-private val MONTHS_3 = arrayOf(
-    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
-)
-
-/** Returns (3-letter month ALL-CAPS, day number string) from an ISO date/datetime string. */
-private fun calloutMonthDay(at: String): Pair<String, String>? {
-    val datePart = at.substringBefore("T").trim()
-    val parts = datePart.split("-")
-    if (parts.size < 3) return null
-    val monthIdx = (parts[1].toIntOrNull() ?: return null) - 1
-    val day = parts[2].toIntOrNull() ?: return null
-    if (monthIdx !in 0..11) return null
-    return MONTHS_3[monthIdx] to day.toString()
-}
-
-/** Returns "Mon D" (e.g. "Aug 25") from an ISO date/datetime string. */
-private fun calloutDateLabel(at: String): String {
-    val (mon, day) = calloutMonthDay(at) ?: return at
-    val mon3cap = mon[0] + mon.substring(1).lowercase()  // "AUG" → "Aug"
-    return "$mon3cap $day"
-}
 
 @Composable
 private fun NextMilestoneRow(callout: PresentedStop) {
     val cs = MaterialTheme.colorScheme
-    val (mon, day) = calloutMonthDay(callout.stop.at) ?: Pair("", "")
+    val mon = callout.monthUpper
+    val day = callout.dayOfMonth
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -280,7 +266,7 @@ private fun NextMilestoneRow(callout: PresentedStop) {
                     )
                 }
                 Text(
-                    text = calloutDateLabel(callout.stop.at),
+                    text = callout.dateLabel,
                     fontSize = 11.5.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -588,10 +574,9 @@ private fun StopRow(ps: PresentedStop, isLastRow: Boolean) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Time label: parse HH:MM from ISO "...THH:MM:SS±offset", display as h:MM (12-hr, no am/pm)
-                val timeLabel = stopTimeLabel(stop.at)
+                // tz-aware "h:MM AM/PM" (date-only stop → its date); computed in the presenter.
                 Text(
-                    text = timeLabel,
+                    text = ps.timeLabel ?: ps.dateLabel,
                     fontSize = 12.5.sp,
                     color = cs.onSurfaceVariant,
                 )
@@ -641,24 +626,6 @@ private fun TailRow(tailCount: Int) {
             color = cs.onSurfaceVariant,
         )
     }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Parse "HH:MM" from an ISO-8601 [at] string and format as "h:MM" (12-hr, no am/pm),
- * matching the design's clockTime format. Falls back to the raw string on parse failure.
- */
-private fun stopTimeLabel(at: String): String {
-    val timePart = at.substringAfter("T", "")
-        .substringBefore("-")
-        .substringBefore("+")
-    val parts = timePart.split(":")
-    if (parts.size < 2) return at
-    val h = parts[0].toIntOrNull() ?: return at
-    val m = parts[1].padStart(2, '0')
-    val h12 = (h % 12).let { if (it == 0) 12 else it }
-    return "$h12:$m"
 }
 
 // ── Footer row ────────────────────────────────────────────────────────────────

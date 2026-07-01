@@ -54,6 +54,10 @@ For each agreed hub:
   on the hub's (or card's) `media` — no image URL needed, so nothing to allowlist (see
   `references/content-model.md` → Visual enrichment). Hero/thumbnail IMAGES are allowlisted
   + operator-surfaced (guardrail 8) — prefer icon+accent unless an image clearly earns it.
+- For a **dated** hub (a move, a trip, college move-in, a party day), add a `timeline`
+  (ADR 0045) so it gains an axis of time — a live day rail and/or a multi-month roadmap.
+  Start from `dayfold template timeline`, author the **stops** only (the client picks the
+  scale), push with `--hub`. See `references/content-model.md` → Hub `timeline`.
 
 For each signal worth surfacing **now**:
 - Author a BriefingCard of the right `type` from `dayfold template <type>`, set

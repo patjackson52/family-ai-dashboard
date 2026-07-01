@@ -10,6 +10,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -87,6 +88,20 @@ class TimelineDetailSnapshotTest {
         ),
     )
 
+    // Both-scales hub: today (move-in) has an intraday schedule AND stops span May–Sep → the
+    // scope toggle is offered. Auto-selects Day.
+    private fun bothScalesTimeline() = Timeline(
+        title = "Move-in day",
+        tz = "America/New_York",
+        stops = listOf(
+            Stop(at = "2026-05-01", title = "Enrollment deposit", done = true),
+            Stop(at = "2026-07-01", title = "Housing assigned", done = true),
+            Stop(at = "2026-08-24T08:00:00-04:00", title = "Car loaded", done = true),
+            Stop(at = "2026-08-24T11:00:00-04:00", title = "Elevator slot"),
+            Stop(at = "2026-09-19", title = "Orientation"),
+        ),
+    )
+
     private fun shot(name: String, tl: Timeline, scale: TimelineScale) = runComposeUiTest {
         setContent {
             DayfoldTheme(darkTheme = false) {
@@ -136,6 +151,7 @@ class TimelineDetailSnapshotTest {
 
     @Test fun dayLight()  = shot("timeline-detail-day-light", dayTimeline(), TimelineScale.Day)
     @Test fun hubLight()  = shot("timeline-detail-hub-light", hubTimeline(), TimelineScale.Hub)
+    @Test fun bothToggleLight() = shot("timeline-detail-both-toggle-light", bothScalesTimeline(), TimelineScale.Day)
     // Scrolled hub snapshot: shows the October future-major stop (star glyph + T4 card).
     @Test fun hubMajorFutureLight() =
         shotScrolled("timeline-detail-hub-major-future-light", hubTimeline(), TimelineScale.Hub, 12)
@@ -269,5 +285,46 @@ class TimelineDetailSnapshotTest {
         // Scroll to provenance item (index 13 = last in the 14-item hub list).
         onNode(hasScrollAction()).performScrollToIndex(13)
         onNodeWithText("These milestones were added", substring = true).assertExists()
+    }
+
+    // ── Behavioral assertions — scope toggle ──────────────────────────────────
+
+    @Test fun toggleOfferedWhenBothScales() = runComposeUiTest {
+        setContent {
+            DayfoldTheme {
+                Box(Modifier.width(390.dp).height(780.dp)) {
+                    TimelineDetail(bothScalesTimeline(), TimelineScale.Day, nowIso, ny, {}, {})
+                }
+            }
+        }
+        onNodeWithText("This day").assertExists()
+        onNodeWithText("Whole hub").assertExists()
+    }
+
+    @Test fun toggleSwitchesDayToHub() = runComposeUiTest {
+        setContent {
+            DayfoldTheme {
+                Box(Modifier.width(390.dp).height(780.dp)) {
+                    TimelineDetail(bothScalesTimeline(), TimelineScale.Day, nowIso, ny, {}, {})
+                }
+            }
+        }
+        // Day view groups by part-of-day; no month header yet.
+        onNodeWithText("MORNING", substring = true).assertExists()
+        // Switch to the roadmap → month groups appear.
+        onNodeWithText("Whole hub").performClick()
+        onNodeWithText("SEPTEMBER", substring = true).assertExists()
+    }
+
+    @Test fun toggleHiddenForSingleScale() = runComposeUiTest {
+        setContent {
+            DayfoldTheme {
+                Box(Modifier.width(390.dp).height(780.dp)) {
+                    TimelineDetail(dayTimeline(), TimelineScale.Day, nowIso, ny, {}, {})
+                }
+            }
+        }
+        // dayTimeline() is a single-scale (today-only) timeline → no toggle.
+        onNodeWithText("Whole hub").assertDoesNotExist()
     }
 }

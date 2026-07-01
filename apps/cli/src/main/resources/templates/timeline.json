@@ -1,0 +1,29 @@
+{
+  "type": "starting-college",
+  "title": "Maya starts college",
+  "status": "active",
+  "countdown_to": "2026-08-24T00:00:00Z",
+  "visibility": "family",
+  "timeline": {
+    "title": "Move-in day",
+    "tz": "America/New_York",
+    "stops": [
+      { "at": "2026-05-01", "title": "Enrollment deposit paid", "done": true, "assignee": "Pat" },
+      { "at": "2026-06-12", "title": "Housing application submitted", "done": true, "assignee": "Maya" },
+      { "at": "2026-07-20", "title": "Orientation completed", "done": true, "assignee": "Maya" },
+      { "at": "2026-08-24T07:30:00-04:00", "title": "Car loaded", "sub": "Boxes, mini-fridge, bedding", "assignee": "Pat", "done": true },
+      { "at": "2026-08-24T09:50:00-04:00", "title": "Checked in", "done": true,
+        "attachments": [ { "kind": "nav", "label": "Map", "query": "Henderson Hall" } ] },
+      { "at": "2026-08-24T11:00:00-04:00", "title": "Move-in — Henderson Hall", "major": true,
+        "sub": "Room 214 · 20-min elevator window", "assignee": "Pat + Maya",
+        "attachments": [
+          { "kind": "call", "label": "RA desk", "tel": "+13175551212" },
+          { "kind": "open", "label": "Health forms", "ref": { "hubId": "REPLACE_WITH_HUB_ID", "sectionId": "REPLACE_WITH_SECTION_ID", "blockId": "REPLACE_WITH_BLOCK_ID" } }
+        ] },
+      { "at": "2026-08-24T12:30:00-04:00", "title": "Lunch break", "sub": "Campus dining hall" },
+      { "at": "2026-08-24T14:00:00-04:00", "title": "Bookstore & student ID" },
+      { "at": "2026-08-28", "title": "First day of classes", "sub": "Syllabus week begins" },
+      { "at": "2026-09-19", "title": "Family weekend" }
+    ]
+  }
+}
