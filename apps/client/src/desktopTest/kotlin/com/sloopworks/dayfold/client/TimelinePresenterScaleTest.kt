@@ -27,11 +27,6 @@ class TimelinePresenterScaleTest {
         assertNull(nowLineIndex(day, "2026-09-01T10:00:00-04:00", ny))
     }
 
-    @Test fun `not-today returns null nowLineIndex`() {
-        val day = stopStatuses(intraday().stops, "2026-08-24T10:00:00-04:00", ny)
-        assertNull(nowLineIndex(day, "2026-09-01T10:00:00-04:00", ny))
-    }
-
     @Test fun `focalDay tie resolved by today`() {
         // Two dates each have 2 intraday stops; one is today → focalDay returns today
         val tl = Timeline(tz = "America/New_York", stops = listOf(
@@ -41,25 +36,29 @@ class TimelinePresenterScaleTest {
         assertEquals(kotlinx.datetime.LocalDate(2026, 8, 24), result)
     }
 
-    @Test fun `cross-tz same absolute now yields consistent status`() {
-        // Same timeline authored with tz = America/New_York.
-        // nowIso represents the same absolute moment; evaluate with ny tz (the author's tz).
-        // Verifies presenter is tz-injected, not system-tz dependent.
-        val tl = Timeline(tz = "America/New_York", stops = listOf(
-            Stop("2026-08-24T08:00:00-04:00", "morning"),
-            Stop("2026-08-24T14:00:00-04:00", "afternoon")))
-        // now = 2026-08-24T10:00-04:00 = 2026-08-24T14:00:00Z
-        val nowNy   = "2026-08-24T10:00:00-04:00"  // NY offset
-        val nowUtc  = "2026-08-24T14:00:00Z"         // same absolute instant, UTC form
+    @Test fun `cross-tz injected tz drives day-boundary classification`() {
+        // Proves tz-injection: the SAME stops + SAME absolute nowIso yield DIFFERENT
+        // nowLineIndex results when different tz values are injected.
+        //
+        // Stop at 2026-08-25T06:00:00Z:
+        //   UTC  → local date Aug 25  (stop is tomorrow when now=Aug 24 UTC)
+        //   LA   → local date Aug 24 at 23:00 PDT (stop is tonight, i.e. today, when now=Aug 24 LA)
+        //
+        // nowIso 2026-08-24T20:00:00Z:
+        //   UTC  → today = Aug 24; stop's local date Aug 25 ≠ today → focalMatchesToday = false → null
+        //   LA   → today = Aug 24; stop's local date Aug 24 = today  → focalMatchesToday = true  → 0
+        //
+        // If tz-injection were broken (currentSystemDefault() used instead), both calls would
+        // produce the same result and assertNotEquals would fail deterministically.
+        val la  = TimeZone.of("America/Los_Angeles")
+        val utc = TimeZone.UTC
+        val stops  = listOf(Stop("2026-08-25T06:00:00Z", "boundary-stop"))
+        val nowIso = "2026-08-24T20:00:00Z"
 
-        val statusesNy  = stopStatuses(tl.stops, nowNy,  ny)
-        val statusesUtc = stopStatuses(tl.stops, nowUtc, ny)   // still inject ny as tz
+        val statusesUtc = stopStatuses(stops, nowIso, utc)
+        val statusesLa  = stopStatuses(stops, nowIso, la)
 
-        // Both should classify morning=Done, afternoon=Next regardless of how nowIso is expressed
-        assertEquals(statusesNy.map { it.status }, statusesUtc.map { it.status })
-
-        // Now line should land at index 1 (after morning) in both cases
-        assertEquals(1, nowLineIndex(statusesNy,  nowNy,  ny))
-        assertEquals(1, nowLineIndex(statusesUtc, nowUtc, ny))
+        assertNull(nowLineIndex(statusesUtc, nowIso, utc))   // stop is Aug 25 UTC — not today
+        assertEquals(0, nowLineIndex(statusesLa,  nowIso, la))  // stop is Aug 24 LA — is today
     }
 }
