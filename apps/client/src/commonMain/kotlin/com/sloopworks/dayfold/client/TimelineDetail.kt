@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -271,7 +272,10 @@ private fun TlEntryRow(
     val isMajor = stop.major
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        // IntrinsicSize.Min bounds the row to its content height so the rail's
+        // weight(1f) connector fills that height (continuous line) instead of
+        // grabbing the LazyColumn's unbounded max.
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // ── Rail ─────────────────────────────────────────────────────────────
@@ -337,12 +341,15 @@ private fun TlEntryRow(
                 )
             }
 
-            // Connector: FIXED height (not weight) — avoids consuming parent max height
+            // Connector: fills the entry's height (the mock's flex:1 rail) so the line
+            // is continuous between stops. Safe because the Row is IntrinsicSize.Min,
+            // so weight(1f) is bounded by the content height (not the LazyColumn max).
             if (!isLast) {
+                Spacer(Modifier.height(2.dp))
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(20.dp)
+                        .weight(1f)
                         .background(if (isDone) cs.secondary else cs.outlineVariant),
                 )
             }
