@@ -78,9 +78,12 @@ un-approved batch. If the server returns non-200, surface the body, fix, re-push
      skip the click.
 4. Propose new cards/blocks → confirm → push (same flow as Phase B). Only propose
    net-new content; do not duplicate what `pull` already returned.
+5. Stale or superseded content is a `dayfold delete` candidate (a hub/card that no
+   longer reflects reality) — propose it explicitly, same confirm bar as a push
+   (guardrail 9), never delete silently.
 
 ## Always
 
-- Propose-confirm before EVERY push.
+- Propose-confirm before EVERY push (or delete).
 - Honest privacy chips; own-mail-only email; adults-only accounts; `provenance` on
   everything. See `references/guardrails.md`.

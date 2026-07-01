@@ -610,3 +610,26 @@ until the operator gates (**INB-23** / ADR 0034 G1–G5). Follow-on tasks:
   (~10× minute cost), driven by the same `android-*`-parallel tags. Needs the operator's
   Mac + an Apple Developer account ($99/yr — **spend**). Large; sequenced after the iOS
   host shell (contends with the iOS-shell task in TASK-KMP).
+
+## CODE DEDUP FINDINGS (2026-07-01 audit — Small, do with a build-capable toolchain)
+
+Not urgent (CI is green, nothing broken) — surfaced by a repo-wide simplify pass.
+Not applied in that session: the sandbox had no outbound access to the Gradle/npm
+registries, so nothing here could be build-verified before pushing. Pick up with a
+normal dev environment (`processes/agent-dev-loop.md`).
+
+- **`apps/api`** — `bearer()` token-extraction is defined twice, identically:
+  `src/app.ts:48` and `src/auth/middleware.ts:10`. Export the one in
+  `middleware.ts`, import it in `app.ts`.
+- **`apps/api`** — visibility/audience validation on `PUT` is copy-pasted between
+  the cards handler (`src/app.ts:363`) and the hubs handler (`src/app.ts:501`).
+  Extract one `validateVisibilityAudience(raw)` helper, use in both.
+- **`apps/cli`** — the refresh-token flow (load creds → `POST /auth/refresh` →
+  parse → save → return) is inlined three times in `Main.kt`
+  (`authedGet` ~L82, `authedDelete` ~L104, inline in `push` ~L280). Extract
+  `refreshAccessToken(store, keychain, api, refreshToken): String` once.
+- **`apps/api`/`apps/cli`/`apps/client`** — `media-validation`/`MediaValidation`
+  exists as three synchronized copies (TS + 2× Kotlin). This one is
+  **intentional** (a parser differential between copies is a security bypass;
+  ADR 0036 notes a Phase 2 codegen-from-one-source plan) — leave as-is, don't
+  "simplify" it into a shared runtime dependency without re-reading ADR 0036.

@@ -59,3 +59,12 @@ the image host. Therefore, beyond the JSON (Guardrail 1), ALWAYS surface the *sp
 chosen image* (the URL, ideally a preview) to the operator before `push` — they approve
 that image, not just "an image". When unsure, prefer `icon` + `accentColor` (no URL, nothing
 fetched).
+
+## 9. Deletion is destructive and cascading
+
+`dayfold delete` (`references/cli.md`) removes a hub (cascading its whole
+section/block tree) or a card. There is no undo from the CLI. Never run it on
+un-approved content: name the exact hub/card and, for a hub, that its sections
+and blocks go with it, and get explicit operator confirmation before deleting —
+the same propose-confirm bar as Guardrail 1, raised because the action can't be
+walked back by re-pushing.

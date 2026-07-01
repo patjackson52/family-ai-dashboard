@@ -59,6 +59,8 @@ see `specs/prototype/00-build-spec-plan.md`.
 | `specs/` | PRD, architecture, pricing model (post-validation) | Source of truth |
 | `processes/` | Planning loop, agent routing, research workflow, fleet patterns, loop journal | Source of truth for process |
 | `backlog/` | `now.md` / `next.md` / `later.md` / `operator-inbox.md` | Working state |
+| `docs/architecture.md` | System diagram, components, data flow, auth, deploy — descriptive, not a design doc | Source of truth for "how it's wired" |
+| `CHANGELOG.md` | Dated log of product/API/feature changes, for release notes | Source of truth for "what shipped" |
 
 ## Required start-of-session routine
 
@@ -73,6 +75,12 @@ see `specs/prototype/00-build-spec-plan.md`.
    8. Relevant research / specs for the task at hand
    9. Persistent memory system (if available)
 2. Do not begin substantive work until constraints are loaded.
+3. **Light-task exception:** for a narrowly-scoped, read-only, or single-file
+   task (answer a question, review one PR, fix one bug) — steps 1–4 are still
+   required, but 5–8 may be skipped in favor of just the files the task
+   touches. Skip nothing when doing loop/planning work, a multi-file change,
+   or anything touching scope/pricing/legal/data-handling — those need the
+   full routine to catch a conflict with working state.
 
 ## Required end-of-session routine
 
@@ -82,6 +90,9 @@ see `specs/prototype/00-build-spec-plan.md`.
    `context/open-questions.md`.
 4. Create or update ADRs when a durable decision was made.
 5. Update `backlog/now.md` / `next.md` / `later.md`.
+6. If the change is user-visible (product behavior, API surface, a new
+   feature) add a dated entry to `CHANGELOG.md`. Internal-only changes
+   (refactors, process docs, planning) don't need one.
 
 ## Process rules
 

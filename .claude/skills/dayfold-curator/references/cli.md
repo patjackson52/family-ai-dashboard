@@ -46,8 +46,22 @@ dayfold push <blockId> block.json --block         # block (body carries sectionI
 - Output: `push <resource>/<id> -> <httpStatus>`. Non-200 prints the server body
   to stderr and exits 1 — the server is the authority; fix and re-push.
 
+## Delete — remove a hub or card
+
+```
+dayfold delete <id>            # hub (default): cascades its sections+blocks
+dayfold delete <id> --card     # card
+dayfold rm <id>                # alias for delete
+```
+- Destructive and cascading (a hub delete takes its whole section/block tree with
+  it) — see guardrail 9, propose-confirm applies here too, naming exactly what
+  will be removed.
+- No section/block delete route (MVP); to drop a stray block, delete its hub and
+  re-push the tree.
+
 ## Notes
 
 - Generate stable ulids for new ids client-side (26-char Crockford base32). Reuse
   an existing id (from `dayfold pull`) to update rather than create.
-- There is NO `dayfold delete` / `create` / `list`. Update-by-push only.
+- There is no `dayfold create` / `list` — `push` both creates (new id) and updates
+  (existing id); `pull` is the read path.

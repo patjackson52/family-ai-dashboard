@@ -25,9 +25,23 @@ side income is a co-goal.
 > `research/validation-round1-2026-06.md`, `adr/0004`, and
 > `specs/prototype/00-build-spec-plan.md`.
 
+## Screenshots
+
+Early on-device validation (Pixel, M0 prototype — proves the CLI → cloud DB →
+render loop, not final visual polish):
+
+<img src="specs/prototype/g1a-pixel10-cloud.png" width="220" alt="Now feed rendering on a Pixel, sourced from the cloud DB"> <img src="specs/prototype/g1a-android-feed.png" width="220" alt="Now feed rendering on an Android emulator">
+
+For the actual design system (Material 3 Expressive, the real card/hub visual
+language), see the hi-fi mockups in [`designs/`](designs/) — those are what's
+being built toward; on-device screenshots of the current polished state
+haven't been captured yet.
+
 ## Orientation
 
 - [CLAUDE.md](CLAUDE.md) — session protocol, governance, directory map
+- [docs/architecture.md](docs/architecture.md) — system diagram, components, data flow, auth, deploy
+- [CHANGELOG.md](CHANGELOG.md) — dated log of product/API/feature changes
 - [context/values-and-direction.md](context/values-and-direction.md) — operator-owned north star
 - [context/business-constitution.md](context/business-constitution.md) — identity + scope firewall (what it is NOT)
 - [adr/0004-product-framing.md](adr/0004-product-framing.md) — what this is, what it isn't, MVP scope
